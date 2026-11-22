@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#5b5bf0">
 <title>Expense Tracker</title>
@@ -904,6 +908,9 @@ function viewSettings(){
   const last=data.settings.lastExport?new Date(data.settings.lastExport).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'never';
   const isFolder=backend.kind==='folder';
   return h('div',{},
+    installEvt?h('section',{class:'card'},h('h3',{},'📲 Install as an app'),
+      h('p',{class:'note',style:{margin:'0 0 10px'}},'Add Expense Tracker to your desktop or home screen. It opens in its own window and works offline.'),
+      h('button',{class:'btn primary',type:'button',onclick:async()=>{installEvt.prompt();try{await installEvt.userChoice}catch(e){}installEvt=null;render()}},'Install app')):null,
     h('section',{class:'card'},h('h3',{},'Appearance'),theme,lbl('Currency symbol',{display:'block',fontSize:'12px',fontWeight:700,color:'var(--muted)',margin:'16px 0 6px',textTransform:'uppercase'}),cur),
     h('section',{class:'card'},h('h3',{},'👤 Users on this device'),
       accounts.users.map(u=>h('button',{class:'row-item',type:'button',onclick:()=>u.id===me.id?openAccount(u,{}):toast('Switch to that user to edit their account')},
@@ -945,6 +952,12 @@ function renderStatus(){
   else{b.classList.add('ok');b.textContent=sstate==='saving'?pre+'Saving…':pre+'Saved';b.onclick=()=>{ui.tab='settings';render()}}
 }
 function applyTheme(t){document.documentElement.setAttribute('data-theme',t||'auto')}
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(me&&ui.tab==='settings')render()});
+window.addEventListener('appinstalled',()=>{installEvt=null;toast('App installed');if(me&&ui.tab==='settings')render()});
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
 $('#fab').addEventListener('click',()=>{if(ui.tab==='split')openSplit(null,ui.group);else openExpense(null)});
 $('#me').addEventListener('click',openMeMenu);
 boot();
