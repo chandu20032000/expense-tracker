@@ -34,10 +34,11 @@ h1{font-size:19px;margin:0;line-height:1.2;white-space:nowrap}
 .pill{font-size:12px;font-weight:600;padding:7px 12px;border-radius:999px;background:var(--soft);color:var(--muted);white-space:nowrap;max-width:40vw;overflow:hidden;text-overflow:ellipsis}
 .pill.ok{color:var(--good)}.pill.warn{background:#fef3c7;color:#92400e}
 .me{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:22px;background:var(--soft);flex:none}
-nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));background:var(--card);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
 .tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:14px;color:var(--muted);font-size:11px;font-weight:600}
 .tab span{font-size:20px;line-height:1.2}
 .tab.on{color:var(--accent);background:var(--soft)}
+nav.tabs.couple-nav{grid-template-columns:repeat(6,minmax(0,1fr))}
 .fab{position:fixed;right:18px;bottom:calc(88px + env(safe-area-inset-bottom));z-index:25;width:60px;height:60px;border-radius:50%;font-size:34px;line-height:1;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 26px rgba(91,91,240,.5);display:grid;place-items:center;padding-bottom:3px}
 .fab:active{transform:scale(.94)}
 .card{background:var(--card);border-radius:var(--r);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
@@ -91,6 +92,10 @@ nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-tem
 .chiprow{display:flex;gap:8px;flex-wrap:wrap}
 .chip{padding:9px 13px;border-radius:999px;background:var(--soft);font-weight:600;font-size:14px;border:2px solid transparent;display:inline-flex;gap:6px;align-items:center}
 .chip.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card))}
+.tracker-switch{display:flex;gap:8px;padding:5px;background:var(--soft);border-radius:16px;margin:0 0 14px}
+.tracker-switch button{flex:1;min-width:0;padding:11px 10px;border-radius:12px;font-weight:700;color:var(--muted);font-size:13px}
+.tracker-switch button.on{background:var(--card);color:var(--accent);box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.contrib{display:grid;gap:10px}.contrib-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}.contrib-row .bar{grid-column:1/-1;height:8px}
 .btn{padding:14px 18px;border-radius:14px;font-weight:700;text-align:center;width:100%}
 .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
 .btn.ghost{background:var(--soft)}.btn.danger{background:var(--bad);color:#fff}
@@ -141,7 +146,7 @@ body[data-mode=gate] .app,body[data-mode=gate] #fab{display:none}
 @keyframes shake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 @keyframes up{from{transform:translateY(40px);opacity:0}}@keyframes fade{from{opacity:0}}
 @media(min-width:860px){
- nav.tabs{position:static;display:inline-grid;grid-template-columns:repeat(5,auto);border:0;border-radius:999px;padding:5px;box-shadow:var(--shadow);margin-bottom:16px;gap:4px}
+ nav.tabs{position:static;display:inline-grid;grid-template-columns:repeat(6,auto);border:0;border-radius:999px;padding:5px;box-shadow:var(--shadow);margin-bottom:16px;gap:4px}
  .tab{flex-direction:row;gap:8px;padding:9px 18px;border-radius:999px;font-size:14px}
  .tab span{font-size:16px}
  .fab{bottom:30px;right:max(30px,calc((100vw - 960px)/2 + 16px))}
@@ -214,9 +219,19 @@ class FolderBackend{
 }
 class BrowserBackend{
   constructor(){this.kind='browser';this.label='this browser'}
-  async read(n){const t=localStorage.getItem('et:'+n);return t?JSON.parse(t):null}
-  async write(n,o){localStorage.setItem('et:'+n,JSON.stringify(o))}
-  async remove(n){localStorage.removeItem('et:'+n)}
+  async read(n){
+    try{const t=window.localStorage.getItem('et:'+n);if(t)return JSON.parse(t)}catch(e){}
+    try{const v=await kvGet('et:'+n);return v==null?null:v}catch(e){return null}
+  }
+  async write(n,o){
+    const value=JSON.stringify(o);
+    try{window.localStorage.setItem('et:'+n,value);return}catch(e){}
+    try{await kvSet('et:'+n,value)}catch(e){throw new Error('Browser storage is unavailable. Open this file in Chrome and allow site storage.')}
+  }
+  async remove(n){
+    try{window.localStorage.removeItem('et:'+n)}catch(e){}
+    try{const db=await idb();await new Promise((res,rej)=>{const q=db.transaction('kv','readwrite').objectStore('kv').delete('et:'+n);q.onsuccess=()=>res();q.onerror=()=>rej(q.error)})}catch(e){}
+  }
 }
 let backend=null,chain=Promise.resolve();
 const bWrite=(n,o)=>{const p=chain.then(()=>backend.write(n,o));chain=p.catch(()=>{});return p};
@@ -228,8 +243,25 @@ const kvSet=async(k,v)=>{try{const db=await idb();return await new Promise((res,
 let accounts={version:1,users:[]},shared=cleanShared(null),me=null,data=null;
 function freshData(){
   return{app:'expense-tracker',version:1,updatedAt:Date.now(),
-    settings:{currency:'₹',theme:'auto',lastExport:0},
-    categories:DEFAULT_CATS.map(([name,emoji,color,budget])=>({id:uid(),name,emoji,color,budget})),expenses:[]};
+    settings:{currency:'₹',theme:'auto',lastExport:0,trackerMode:'single',coupleBudget:0,singleBudgets:{},coupleBudgets:{},coupleQuotas:{}},
+    categories:DEFAULT_CATS.map(([name,emoji,color,budget])=>({id:uid(),name,emoji,color,budget})),expenses:[],ledgerEntries:[]};
+}
+function cleanBudgetMap(raw,categories,useLegacy){
+  const out={};const src=raw&&typeof raw==='object'?raw:{};
+  categories.forEach(c=>{const v=Object.prototype.hasOwnProperty.call(src,c.id)?+src[c.id]:(useLegacy?+c.budget:0);out[c.id]=Number.isFinite(v)&&v>0?r2(v):0});
+  return out;
+}
+const budgetFor=(scope,id)=>r2(+((scope==='couple'?data.settings.coupleBudgets:data.settings.singleBudgets)||{})[id]||0);
+const quotaFor=(categoryId,memberId)=>r2(+(data.settings.coupleQuotas?.[categoryId]?.[memberId]||0));
+function cleanQuotaMap(raw,categories){
+  const out={},src=raw&&typeof raw==='object'?raw:{};
+  categories.forEach(c=>{const row=src[c.id]&&typeof src[c.id]==='object'?src[c.id]:{};out[c.id]={};Object.entries(row).forEach(([id,v])=>{const n=+v;if(id&&Number.isFinite(n)&&n>0)out[c.id][id]=r2(n)})});
+  return out;
+}
+function setBudgetFor(scope,id,value){
+  const key=scope==='couple'?'coupleBudgets':'singleBudgets';
+  if(!data.settings[key])data.settings[key]={};
+  data.settings[key][id]=Number.isFinite(+value)&&+value>0?r2(+value):0;
 }
 function sanitize(o){
   if(!o||typeof o!=='object'||!Array.isArray(o.expenses)||!Array.isArray(o.categories))throw new Error('Not an expense tracker file');
@@ -243,11 +275,13 @@ function sanitize(o){
   const expenses=o.expenses.slice(0,200000).map(e=>({
     id:String(e&&e.id||uid()).slice(0,40),date:String(e&&e.date),amount:r2(+(e&&e.amount)),
     categoryId:ids.has(e&&e.categoryId)?e.categoryId:categories[categories.length-1].id,
-    note:String(e&&e.note||'').slice(0,120),method:METHODS.includes(e&&e.method)?e.method:'Other'
+    note:String(e&&e.note||'').slice(0,120),method:METHODS.includes(e&&e.method)?e.method:'Other',paidBy:String(e&&e.paidBy||''),quotaFrom:String(e&&e.quotaFrom||e&&e.paidBy||'')
   })).filter(e=>dateRe.test(e.date)&&Number.isFinite(e.amount)&&e.amount>0&&!eseen.has(e.id)&&eseen.add(e.id));
+  const lseen=new Set();
+  const ledgerEntries=(Array.isArray(o.ledgerEntries)?o.ledgerEntries:[]).slice(0,100000).map(x=>({id:String(x&&x.id||uid()).slice(0,40),date:String(x&&x.date||''),type:['salary','emi','credit','debit'].includes(x&&x.type)?x.type:'debit',amount:r2(+(x&&x.amount)),note:String(x&&x.note||'').slice(0,120),method:METHODS.includes(x&&x.method)?x.method:'Bank'})).filter(x=>dateRe.test(x.date)&&Number.isFinite(x.amount)&&x.amount>0&&!lseen.has(x.id)&&lseen.add(x.id));
   const st=o.settings||{};
   return{app:'expense-tracker',version:1,updatedAt:Number.isFinite(+o.updatedAt)?+o.updatedAt:Date.now(),
-    settings:{currency:String(st.currency||'₹').slice(0,3),theme:['auto','light','dark'].includes(st.theme)?st.theme:'auto',lastExport:+st.lastExport||0},categories,expenses};
+    settings:{currency:String(st.currency||'₹').slice(0,3),theme:['auto','light','dark'].includes(st.theme)?st.theme:'auto',lastExport:+st.lastExport||0,trackerMode:st.trackerMode==='couple'?'couple':'single',coupleBudget:Number.isFinite(+st.coupleBudget)&&+st.coupleBudget>0?r2(+st.coupleBudget):0,singleBudgets:cleanBudgetMap(st.singleBudgets,categories,true),coupleBudgets:cleanBudgetMap(st.coupleBudgets,categories,false),coupleQuotas:cleanQuotaMap(st.coupleQuotas,categories)},categories,expenses,ledgerEntries};
 }
 function cleanAccounts(o){
   const b64=/^[A-Za-z0-9+/=]{8,200}$/,seen=new Set();
@@ -264,7 +298,7 @@ function cleanShared(o){
   const seen=new Set();
   const people=A(o.people).slice(0,500).map(p=>({id:str(p&&p.id,40),name:str(p&&p.name,30).trim()||'Person',emoji:emo1(p&&p.emoji,'🙂'),userId:p&&p.userId?str(p.userId,40):null})).filter(p=>p.id&&!seen.has(p.id)&&seen.add(p.id));
   const pid=new Set(people.map(p=>p.id)),gs=new Set();
-  const groups=A(o.groups).slice(0,500).map(g=>({id:str(g&&g.id,40),name:str(g&&g.name,40).trim()||'Group',emoji:emo1(g&&g.emoji,'👥'),memberIds:A(g&&g.memberIds).map(String).filter(x=>pid.has(x)),createdBy:str(g&&g.createdBy,40),createdAt:+(g&&g.createdAt)||0})).filter(g=>g.id&&!gs.has(g.id)&&gs.add(g.id));
+  const groups=A(o.groups).slice(0,500).map(g=>({id:str(g&&g.id,40),name:str(g&&g.name,40).trim()||'Group',emoji:emo1(g&&g.emoji,'👥'),memberIds:A(g&&g.memberIds).map(String).filter(x=>pid.has(x)),createdBy:str(g&&g.createdBy,40),createdAt:+(g&&g.createdAt)||0,kind:g&&g.kind==='couple'?'couple':'group'})).filter(g=>g.id&&!gs.has(g.id)&&gs.add(g.id));
   const gid=new Set(groups.map(g=>g.id));
   const expenses=A(o.expenses).slice(0,100000).map(e=>{
     const owes={},vals={};
@@ -275,9 +309,9 @@ function cleanShared(o){
   }).filter(e=>e.id&&gid.has(e.groupId)&&pid.has(e.paidBy)&&dateRe.test(e.date)&&e.amount>0&&Object.keys(e.owes).length);
   const settlements=A(o.settlements).slice(0,100000).map(x=>({id:str(x&&x.id,40),groupId:str(x&&x.groupId,40),date:str(x&&x.date,10),from:str(x&&x.from,40),to:str(x&&x.to,40),amount:money(x&&x.amount),createdAt:+(x&&x.createdAt)||0}))
     .filter(x=>x.id&&gid.has(x.groupId)&&pid.has(x.from)&&pid.has(x.to)&&x.from!==x.to&&dateRe.test(x.date)&&x.amount>0);
-  return{version:1,updatedAt:+o.updatedAt||0,people,groups,expenses,settlements};
+  return{version:1,updatedAt:+o.updatedAt||0,people,groups,expenses,settlements,coupleGroupId:gid.has(o.coupleGroupId)?String(o.coupleGroupId):(groups.find(g=>g.kind==='couple'&&g.memberIds.length===2)?.id||null)};
 }
-const ui={tab:'home',month:monthOf(todayStr()),q:'',cat:'',all:false,group:null};
+const ui={tab:'home',budgetScope:'single',month:monthOf(todayStr()),q:'',cat:'',all:false,group:null};
 const cat=id=>data.categories.find(c=>c.id===id)||{id:'',name:'Uncategorised',emoji:'❓',color:'#94a3b8',budget:0};
 const fmt=n=>(data?data.settings.currency:'₹')+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
 const fmtP=p=>fmt(p/100);
@@ -485,7 +519,14 @@ function openMeMenu(){
 /* ================= personal expense UI ================= */
 function openExpense(ex,pre){
   pre=pre||{};
-  const st={cat:ex?ex.categoryId:(ui.cat&&data.categories.some(c=>c.id===ui.cat)?ui.cat:data.categories[0].id),method:ex?ex.method:'UPI'};
+  const coupleMode=data.settings.trackerMode==='couple';
+  const st={cat:ex?ex.categoryId:(ui.cat&&data.categories.some(c=>c.id===ui.cat)?ui.cat:data.categories[0].id),method:ex?ex.method:'UPI',paidBy:ex&&ex.paidBy?ex.paidBy:(myPerson()?.id||'')};
+  const members=coupleMode&&coupleGroup()?coupleGroup().memberIds:[me.id];
+  const payer=h('select',{class:'inp',value:st.paidBy,onchange:e=>{st.paidBy=e.target.value}},
+    members.map(id=>h('option',{value:id,selected:id===st.paidBy},pname(id))));
+  const quotaFrom=h('select',{class:'inp',value:ex?.quotaFrom||ex?.paidBy||st.paidBy,onchange:e=>{st.quotaFrom=e.target.value}});
+  st.quotaFrom=ex?.quotaFrom||ex?.paidBy||st.paidBy;
+  quotaFrom.replaceChildren(...members.map(id=>h('option',{value:id,selected:id===st.quotaFrom},pname(id))));
   const amt=h('input',{class:'amount',inputmode:'decimal',placeholder:'0',autocomplete:'off','aria-label':'Amount',value:ex?String(ex.amount):(pre.amount?String(pre.amount):''),maxlength:'12'});
   const date=h('input',{class:'inp',type:'date',value:ex?ex.date:todayStr()});
   const note=h('input',{class:'inp',type:'text',maxlength:'120',placeholder:'What was it for? (optional)',value:ex?ex.note:(pre.note||'')});
@@ -493,12 +534,21 @@ function openExpense(ex,pre){
   const paint=()=>{
     chips.replaceChildren(...data.categories.map(c=>h('button',{type:'button',class:'chip'+(c.id===st.cat?' on':''),onclick:()=>{st.cat=c.id;paint()}},c.emoji+' '+c.name)));
     mchips.replaceChildren(...METHODS.map(m=>h('button',{type:'button',class:'chip'+(m===st.method?' on':''),onclick:()=>{st.method=m;paint()}},m)));
+    if(coupleMode){
+      const period=monthOf(date.value||todayStr());
+      quotaFrom.replaceChildren(...members.map(id=>{
+        const quota=quotaFor(st.cat,id);
+        const used=sum(data.expenses.filter(e=>e.id!==(ex&&ex.id)&&e.categoryId===st.cat&&monthOf(e.date)===period&&(e.quotaFrom||e.paidBy)===id));
+        const left=Math.max(0,r2(quota-used));
+        return h('option',{value:id,selected:id===st.quotaFrom},`${pname(id)} · ${quota>0?fmt(left)+' left':'No quota set'}`);
+      }));
+    }
   };paint();
   const doSave=()=>{
     const v=r2(parseFloat(amt.value.replace(/,/g,'')));
     if(!Number.isFinite(v)||v<=0||v>=1e9){toast('Enter a valid amount');amt.focus();return}
     if(!dateRe.test(date.value)){toast('Pick a date');return}
-    const rec={date:date.value,amount:v,categoryId:st.cat,note:note.value.trim().slice(0,120),method:st.method};
+    const rec={date:date.value,amount:v,categoryId:st.cat,note:note.value.trim().slice(0,120),method:st.method,...(coupleMode?{paidBy:st.paidBy,quotaFrom:st.quotaFrom||st.paidBy}:{})};
     if(ex)Object.assign(ex,rec);else data.expenses.push({id:uid(),...rec});
     if(!ex&&monthOf(rec.date)!==ui.month)ui.month=monthOf(rec.date);
     close();commit();toast(ex?'Expense updated':'Expense added');
@@ -507,22 +557,29 @@ function openExpense(ex,pre){
   const close=sheet(ex?'Edit expense':'New expense',h('div',{},
     h('div',{class:'amountbox'},h('span',{},data.settings.currency),amt),
     lbl('Category'),chips,lbl('Date'),date,lbl('Note'),note,lbl('Paid with'),mchips,
+    coupleMode?h('div',{},lbl('Paid by'),payer,lbl('Deduct from whose category quota?'),quotaFrom,h('p',{class:'note'},'This determines whose allocated amount is reduced for this category.')):null,
     h('div',{class:'row'},
       ex&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},'aria-label':'Delete expense',onclick:async()=>{
         if(await ask('Delete expense?',`${fmt(ex.amount)} · ${cat(ex.categoryId).name}`,'Delete',true)){close();data.expenses=data.expenses.filter(x=>x.id!==ex.id);commit();toast('Deleted')}}},'🗑️'),
       h('button',{class:'btn primary',type:'button',onclick:doSave},ex?'Save changes':'Add expense'))));
   if(!ex)setTimeout(()=>amt.focus(),120);
 }
-function openCategory(c){
+function openCategory(c,scope='single'){
   const st={color:c?c.color:COLORS[data.categories.length%COLORS.length]};
   const name=h('input',{class:'inp',maxlength:'40',placeholder:'e.g. Pets',value:c?c.name:''});
   const emoji=h('input',{class:'inp',maxlength:'4',placeholder:'🏷️',value:c?c.emoji:'',style:{width:'90px',textAlign:'center',fontSize:'22px'}});
-  const budget=h('input',{class:'inp',inputmode:'decimal',placeholder:'0',value:c?String(c.budget):''});
+  const budget=h('input',{class:'inp',inputmode:'decimal',placeholder:'0',value:c?String(budgetFor(scope,c.id)):''});
+  const group=scope==='couple'?coupleGroup():null;
+  const quotaInputs={};
+  const quotaBox=h('div',{class:'stack'});
+  if(scope==='couple'&&group){
+    group.memberIds.forEach(id=>{const inp=h('input',{class:'inp',inputmode:'decimal',placeholder:'0',value:c?String(quotaFor(c.id,id)||''):''});quotaInputs[id]=inp;quotaBox.append(h('div',{},lbl(pname(id)+' category quota'),inp))});
+  }
   const sw=h('div',{class:'swatches'});
   const paint=()=>sw.replaceChildren(...COLORS.map(col=>h('button',{type:'button',class:'sw'+(col===st.color?' on':''),'aria-label':'Colour '+col,style:{background:col},onclick:()=>{st.color=col;paint()}})));paint();
   const close=sheet(c?'Edit category':'New category',h('div',{},
     h('div',{style:{display:'flex',gap:'10px'}},h('div',{},lbl('Icon',{marginTop:0}),emoji),h('div',{style:{flex:'1'}},lbl('Name',{marginTop:0}),name)),
-    lbl(`Monthly budget (${data.settings.currency})`),budget,lbl('Colour'),sw,
+    scope==='couple'&&group?h('div',{},lbl('Allocate category quota by member'),quotaBox,h('p',{class:'note'},'The category budget is calculated from the member quotas below.')):h('div',{},lbl(`Monthly budget (${data.settings.currency})`),budget),lbl('Colour'),sw,
     h('div',{class:'row'},
       c&&data.categories.length>1&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},'aria-label':'Delete category',onclick:async()=>{
         const used=data.expenses.filter(e=>e.categoryId===c.id).length,other=data.categories.find(x=>x.id!==c.id);
@@ -531,8 +588,13 @@ function openCategory(c){
       h('button',{class:'btn primary',type:'button',onclick:()=>{
         const n=name.value.trim();if(!n)return toast('Give it a name');
         const b=parseFloat(budget.value.replace(/,/g,''));
-        const rec={name:n.slice(0,40),emoji:emo1(emoji.value.trim(),'🏷️'),color:st.color,budget:Number.isFinite(b)&&b>0?r2(b):0};
-        if(c)Object.assign(c,rec);else data.categories.push({id:uid(),...rec});
+        const quotaValues={};let quotaTotal=0;
+        Object.entries(quotaInputs).forEach(([id,inp])=>{const v=parseFloat(inp.value.replace(/,/g,''));quotaValues[id]=Number.isFinite(v)&&v>0?r2(v):0;quotaTotal+=quotaValues[id]});
+        const categoryBudget=scope==='couple'&&group? r2(quotaTotal):(Number.isFinite(b)&&b>0?r2(b):0);
+        const rec={name:n.slice(0,40),emoji:emo1(emoji.value.trim(),'🏷️'),color:st.color,budget:categoryBudget};
+        let targetId;
+        if(c){Object.assign(c,{name:rec.name,emoji:rec.emoji,color:rec.color});targetId=c.id;setBudgetFor(scope,c.id,categoryBudget)}else{const added={id:uid(),...rec};data.categories.push(added);targetId=added.id;setBudgetFor('single',added.id,0);setBudgetFor('couple',added.id,0);setBudgetFor(scope,added.id,categoryBudget)}
+        if(scope==='couple'&&group){if(!data.settings.coupleQuotas)data.settings.coupleQuotas={};data.settings.coupleQuotas[targetId]=quotaValues;}
         close();commit();
       }},c?'Save':'Add category'))));
 }
@@ -580,6 +642,83 @@ function computeOwes(total,mode,vals,ids){
   const o={};ids.forEach((id,i)=>{if(base[i]>0)o[id]=base[i]});return{owes:o};
 }
 
+/* ================= couple tracker ================= */
+function coupleGroup(){return shared.groups.find(g=>g.id===shared.coupleGroupId&&g.memberIds.length===2)||null}
+function openCoupleSetup(){
+  const existing=coupleGroup(),mp=myPerson();
+  const partner=h('input',{class:'inp',maxlength:'30',placeholder:'Partner name',value:existing?person(existing.memberIds.find(id=>id!==mp.id)).name:''});
+  const close=sheet(existing?'Couple tracker settings':'Set up couple tracker',h('div',{},
+    lbl('Partner name',{marginTop:0}),partner,
+    h('p',{class:'note'},'No overall budget is needed during setup. Set monthly limits for individual categories in Budgets; the total budget is calculated automatically from those categories.'),
+    h('div',{class:'row'},
+      existing&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},onclick:async()=>{
+        if(await ask('Disable couple tracker?','The couple group and its history remain available under Split.','Disable',true)){shared.coupleGroupId=null;data.settings.trackerMode='single';commit();commitShared();close()}}},'Disable'),
+      h('button',{class:'btn primary',type:'button',onclick:()=>{
+        const n=partner.value.trim();
+        if(!n)return toast('Enter your partner name');
+        let p=existing&&existing.memberIds.map(person).find(x=>x.id!==mp.id);
+        if(p){p.name=n.slice(0,30)}else{p={id:uid(),name:n.slice(0,30),emoji:'💜',userId:null};shared.people.push(p)}
+        if(existing){existing.memberIds=[mp.id,p.id];existing.name='Couple budget';existing.emoji='💑'}
+        else{const g={id:uid(),createdBy:me.id,createdAt:Date.now(),name:'Couple budget',emoji:'💑',kind:'couple',memberIds:[mp.id,p.id]};shared.groups.push(g);shared.coupleGroupId=g.id}
+        data.settings.trackerMode='couple';
+        close();commit();commitShared();toast('Couple tracker ready');
+      }},existing?'Save':'Create couple tracker'))));
+}
+function viewCouple(){
+  const g=coupleGroup();
+  if(!g)return h('div',{},h('section',{class:'card empty'},h('div',{class:'e'},'💑'),h('h3',{},'Set up your couple budget'),h('p',{},'Add your partner to start tracking shared expenses and contributions.'),h('button',{class:'btn primary',type:'button',onclick:openCoupleSetup},'＋ Set up couple tracker')));
+  const ids=g.memberIds,people=ids.map(person);
+  // Couple dashboard budgets are driven by expenses entered through the normal
+  // Add Expense form (which stores the selected payer in data.expenses).
+  // Split records live in shared.expenses and are a separate settlement ledger.
+  const list=data.expenses.filter(e=>ids.includes(e.paidBy)&&monthOf(e.date)===ui.month);
+  const total=sum(list),budget=r2(data.categories.reduce((a,c)=>a+budgetFor('couple',c.id),0)),pct=budget?total/budget:0;
+  const by=new Map();list.forEach(e=>by.set(e.categoryId,r2((by.get(e.categoryId)||0)+e.amount)));
+  const parts=[...by].map(([id,value])=>({id,value,color:cat(id).color,c:cat(id)})).sort((a,b)=>b.value-a.value);
+  const now=todayStr(),cur=ui.month===monthOf(now),days=cur?+now.slice(8):(ui.month<monthOf(now)?new Date(+ui.month.slice(0,4),+ui.month.slice(5),0).getDate():0);
+  const hero=h('section',{class:'card hero'},
+    h('small',{},'💑 Couple spending · '+monthLabel(ui.month)),
+    h('div',{class:'big'},fmt(total)),
+    h('div',{class:'bar'+(pct>1?' over':'')},h('i',{style:{width:Math.min(100,pct*100)+'%'}})),
+    h('div',{class:'stats'},
+      h('div',{},h('small',{},'Budget'),h('b',{},fmt(budget))),
+      h('div',{},h('small',{},budget-total>=0?'Left':'Over by'),h('b',{},fmt(Math.abs(r2(budget-total))))),
+      h('div',{},h('small',{},'Daily avg'),h('b',{},fmt(days?r2(total/days):0)))));
+  const chart=h('section',{class:'card'},h('h3',{},'Where it went'),
+    parts.length?h('div',{class:'donut-row'},
+      h('div',{class:'donut-wrap'},donut(parts,total),h('div',{class:'donut-mid'},h('small',{},'Total'),h('b',{},fmt(total)))),
+      h('div',{class:'legend'},parts.slice(0,6).map(p=>h('div',{},h('i',{style:{background:p.color}}),h('span',{},p.c.emoji+' '+p.c.name),h('b',{},Math.round(p.value/total*100)+'%')))))
+    :h('div',{class:'empty'},h('div',{class:'e'},'🌱'),'Nothing spent yet. Tap + to add an expense.'));
+  const categories=data.categories.filter(c=>budgetFor('couple',c.id)>0||by.has(c.id));
+  const cats=h('section',{class:'card'},h('h3',{},'Budgets'),
+    categories.length?categories.map(c=>{
+      const spent=by.get(c.id)||0,cb=budgetFor('couple',c.id),ratio=cb?spent/cb:0,expanded=ui.expandedCoupleCategory===c.id;
+      const paid=ids.map(id=>({id,amount:sum(list.filter(e=>e.categoryId===c.id&&e.paidBy===id))}));
+      return h('div',{class:'catrow',style:{padding:'14px',margin:'8px 0',border:'1px solid var(--line)',borderRadius:'16px',background:'var(--surface)'}},
+        h('button',{type:'button','aria-expanded':expanded?'true':'false',class:'couple-category-toggle',style:{display:'block',width:'100%',padding:0,border:0,background:'transparent',color:'inherit',textAlign:'left',cursor:'pointer'},onclick:()=>{ui.expandedCoupleCategory=expanded?null:c.id;render()}},
+          h('div',{class:'top'},
+            h('span',{class:'ico',style:{background:c.color+'26'}},c.emoji),
+            h('div',{class:'nm'},c.name,h('small',{},cb>0?`${fmt(spent)} of ${fmt(cb)}`:fmt(spent)+' spent')),
+            h('b',{style:{color:ratio>1?'var(--bad)':'inherit'}},cb>0?Math.round(ratio*100)+'%':''),
+            h('span',{style:{color:'var(--muted)',fontSize:'18px',marginLeft:'4px'}},expanded?'⌃':'⌄')),
+          cb>0&&h('div',{class:'bar',style:{marginTop:'8px'}},h('i',{style:{width:Math.min(100,ratio*100)+'%',background:ratio>1?'':c.color}}))),
+        expanded&&h('div',{style:{borderTop:'1px solid var(--line)',marginTop:'12px',paddingTop:'10px',display:'grid',gap:'9px'}},
+          h('b',{style:{fontSize:'13px'}},'Contribution by member'),
+          paid.map(x=>{
+            const quota=quotaFor(c.id,x.id),used=sum(list.filter(e=>e.categoryId===c.id&&(e.quotaFrom||e.paidBy)===x.id)),remaining=Math.max(0,r2(quota-used));
+            return h('div',{style:{display:'grid',gap:'4px',padding:'7px 0',borderBottom:'1px solid var(--line)'}},
+              h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}},
+                h('span',{style:{display:'flex',alignItems:'center',gap:'8px'}},pav(x.id),h('span',{},x.id===myPerson().id?'You':person(x.id).name)),
+                h('b',{},`Spent ${fmt(used)}`)),
+              h('small',{style:{color:'var(--muted)'}},`Quota ${fmt(quota)} · Remaining ${fmt(remaining)}`));
+          })))
+    }):h('div',{class:'empty'},'Add category budgets to see them here.'));
+  return h('div',{},monthBar(),
+    h('div',{class:'row',style:{margin:'0 0 12px'}},
+      h('button',{class:'btn primary',type:'button',onclick:()=>openExpense(null)},'＋ Add expense'),
+      h('button',{class:'btn ghost',type:'button',onclick:openCoupleSetup},'⚙️ Settings')),
+    hero,h('div',{class:'grid2'},chart,cats));
+}
 /* ================= split UI ================= */
 function openSplit(ex,groupId){
   const mp=myPerson(),groups=myGroups();
@@ -759,7 +898,7 @@ function viewGroup(g){
     h('section',{class:'card hero'},h('small',{},g.emoji+' '+g.name),
       h('div',{class:'big',style:{fontSize:'30px'}},mine>0?'You are owed '+fmtP(mine):mine<0?'You owe '+fmtP(-mine):'All settled up'),
       h('div',{class:'row',style:{marginTop:'4px'}},
-        h('button',{class:'btn ghost',type:'button',style:{background:'#fff',color:'#4338ca'},onclick:()=>openSplit(null,g.id)},'＋ Add expense'),
+        h('button',{class:'btn ghost',type:'button',style:{background:'#fff',color:'#4338ca'},onclick:()=>openExpense(null)},'＋ Add expense'),
         h('button',{class:'btn ghost',type:'button',style:{background:'rgba(255,255,255,.2)',color:'#fff'},onclick:()=>openSettle(g,null,null)},'💸 Settle up'))),
     h('div',{class:'grid2'},
       h('section',{class:'card'},h('h3',{},'Balances'),g.memberIds.map(id=>h('div',{class:'mrow'},pav(id),h('span',{class:'nm'},pname(id)),owedTxt(net[id]||0)))),
@@ -779,7 +918,7 @@ function expRow(e){
   const c=cat(e.categoryId);
   return h('button',{class:'row-item',type:'button',onclick:()=>openExpense(e)},
     h('span',{class:'ico',style:{background:c.color+'26'}},c.emoji),
-    h('span',{class:'mid'},h('b',{},e.note||c.name),h('small',{},c.name+' · '+e.method)),h('b',{class:'amt'},'−'+fmt(e.amount)));
+    h('span',{class:'mid'},h('b',{},e.note||c.name),h('small',{},c.name+' · '+e.method+(data.settings.trackerMode==='couple'?' · Paid by '+(e.paidBy?(pname(e.paidBy)):me.name):''))),h('b',{class:'amt'},'−'+fmt(e.amount)));
 }
 function donut(parts,total){
   const svg=s('svg',{viewBox:'0 0 42 42',class:'donut',role:'img','aria-label':'Spending by category'});
@@ -790,7 +929,7 @@ function donut(parts,total){
 }
 function viewHome(){
   const list=monthExp(),total=sum(list);
-  const budget=r2(data.categories.reduce((a,c)=>a+c.budget,0));
+  const budget=r2(data.categories.reduce((a,c)=>a+budgetFor('single',c.id),0));
   const now=todayStr(),cur=ui.month===monthOf(now);
   const[y,m]=ui.month.split('-').map(Number),dim=new Date(y,m,0).getDate();
   const days=cur?+now.slice(8):(ui.month<monthOf(now)?dim:0);
@@ -810,13 +949,13 @@ function viewHome(){
       h('div',{class:'legend'},parts.slice(0,6).map(p=>h('div',{},h('i',{style:{background:p.color}}),h('span',{},p.c.emoji+' '+p.c.name),h('b',{},Math.round(p.value/total*100)+'%')))))
     :h('div',{class:'empty'},h('div',{class:'e'},'🌱'),'Nothing spent yet. Tap + to add an expense.'));
   const cats=h('section',{class:'card'},h('h3',{},'Budgets'),
-    data.categories.filter(c=>c.budget>0||by.has(c.id)).map(c=>{
-      const sp=by.get(c.id)||0,p=c.budget>0?sp/c.budget:0;
+    data.categories.filter(c=>budgetFor('single',c.id)>0||by.has(c.id)).map(c=>{
+      const cb=budgetFor('single',c.id),sp=by.get(c.id)||0,p=cb>0?sp/cb:0;
       return h('div',{class:'catrow'},
         h('div',{class:'top'},h('span',{class:'ico',style:{background:c.color+'26'}},c.emoji),
-          h('div',{class:'nm'},c.name,h('small',{},c.budget>0?`${fmt(sp)} of ${fmt(c.budget)}`:fmt(sp)+' · no budget')),
-          h('b',{style:{color:p>1?'var(--bad)':'inherit'}},c.budget>0?Math.round(p*100)+'%':'')),
-        c.budget>0&&h('div',{class:'bar'+(p>1?' over':'')},h('i',{style:{width:Math.min(100,p*100)+'%',background:p>1?'':c.color}})));
+          h('div',{class:'nm'},c.name,h('small',{},cb>0?`${fmt(sp)} of ${fmt(cb)}`:fmt(sp)+' · no budget')),
+          h('b',{style:{color:p>1?'var(--bad)':'inherit'}},cb>0?Math.round(p*100)+'%':'')),
+        cb>0&&h('div',{class:'bar'+(p>1?' over':'')},h('i',{style:{width:Math.min(100,p*100)+'%',background:p>1?'':c.color}})));
     }));
   const recent=h('section',{class:'card'},h('h3',{},'Recent'),
     list.length?list.slice().sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0).slice(0,5).map(expRow):h('div',{class:'empty'},'No expenses in this month.'));
@@ -840,16 +979,50 @@ function viewHistory(){
   paint();
   return h('div',{},ui.all?h('div',{style:{height:'4px'}}):monthBar(),h('div',{class:'filters'},q,sel),h('div',{class:'chiprow',style:{marginBottom:'8px'}},all),out);
 }
+function openLedgerEntry(entry){
+  const st={type:entry?entry.type:'salary'};
+  const type=h('select',{class:'inp',value:st.type,onchange:e=>{st.type=e.target.value}},
+    [['salary','Salary credited'],['emi','EMI paid'],['credit','Other credit'],['debit','Other debit']].map(([v,l])=>h('option',{value:v,selected:v===st.type},l)));
+  const amount=h('input',{class:'inp',inputmode:'decimal',placeholder:'Amount',value:entry?String(entry.amount):'',maxlength:'12'});
+  const date=h('input',{class:'inp',type:'date',value:entry?entry.date:todayStr()});
+  const note=h('input',{class:'inp',maxlength:'120',placeholder:'e.g. Monthly salary, Home loan EMI',value:entry?entry.note:''});
+  const method=h('select',{class:'inp',value:entry?entry.method:'Bank'},METHODS.map(m=>h('option',{value:m,selected:m===(entry?entry.method:'Bank')},m)));
+  const close=sheet(entry?'Edit month ledger entry':'Add month ledger entry',h('div',{class:'stack'},
+    lbl('Transaction type'),type,lbl('Amount'),amount,lbl('Date'),date,lbl('Description'),note,lbl('Payment method'),method,
+    h('div',{class:'row'},entry&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},onclick:async()=>{if(await ask('Delete entry?','This ledger entry will be removed.','Delete',true)){data.ledgerEntries=data.ledgerEntries.filter(x=>x.id!==entry.id);close();commit()}}},'🗑️'),
+      h('button',{class:'btn primary',type:'button',onclick:()=>{const v=r2(parseFloat(amount.value.replace(/,/g,'')));if(!Number.isFinite(v)||v<=0||v>=1e9){toast('Enter a valid amount');amount.focus();return}if(!dateRe.test(date.value)){toast('Pick a date');return}const rec={id:entry?entry.id:uid(),date:date.value,type:type.value,amount:v,note:note.value.trim(),method:method.value};if(entry)data.ledgerEntries=data.ledgerEntries.map(x=>x.id===entry.id?rec:x);else data.ledgerEntries.push(rec);close();commit();toast('Month ledger updated')}},entry?'Save changes':'Add entry'))));
+}
+function viewMonthLedger(){
+  const rows=(data.ledgerEntries||[]).filter(x=>monthOf(x.date)===ui.month).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+  const credited=sum(rows.filter(x=>x.type==='salary'||x.type==='credit'));
+  const debited=sum(rows.filter(x=>x.type==='emi'||x.type==='debit'));
+  const net=r2(credited-debited);
+  const label=x=>({salary:'Salary credited',emi:'EMI paid',credit:'Other credit',debit:'Other debit'}[x.type]);
+  const row=x=>h('button',{class:'row-item',type:'button',onclick:()=>openLedgerEntry(x)},
+    h('span',{class:'ico',style:{background:(x.type==='salary'||x.type==='credit'?'#10b981':'#ef4444')+'22'}},({salary:'💰',emi:'🏦',credit:'⬆️',debit:'⬇️'})[x.type]),
+    h('span',{class:'mid'},h('b',{},x.note||label(x)),h('small',{},`${label(x)} · ${dayLabel(x.date)} · ${x.method}`)),
+    h('b',{class:'amt',style:{color:x.type==='salary'||x.type==='credit'?'var(--good)':'var(--bad)'}},(x.type==='salary'||x.type==='credit'?'+':'−')+fmt(x.amount)));
+  return h('div',{},monthBar(),
+    h('section',{class:'card hero'},h('small',{},'Month closing balance · net flow'),h('div',{class:'big'},(net<0?'−':'')+fmt(Math.abs(net))),
+      h('div',{class:'stats'},h('div',{},h('small',{},'Credited'),h('b',{},fmt(credited))),h('div',{},h('small',{},'Debited'),h('b',{},fmt(debited))),h('div',{},h('small',{},'Entries'),h('b',{},String(rows.length))))),
+    h('section',{class:'card'},h('div',{class:'row',style:{alignItems:'center'}},h('h3',{style:{margin:0}},'Money in'),h('b',{style:{color:'var(--good)'}},'+'+fmt(credited))),
+      rows.filter(x=>x.type==='salary'||x.type==='credit').length?rows.filter(x=>x.type==='salary'||x.type==='credit').map(row):h('div',{class:'empty'},'No credits recorded this month.')),
+    h('section',{class:'card'},h('div',{class:'row',style:{alignItems:'center'}},h('h3',{style:{margin:0}},'Money out'),h('b',{style:{color:'var(--bad)'}},'−'+fmt(debited))),
+      rows.filter(x=>x.type==='emi'||x.type==='debit').length?rows.filter(x=>x.type==='emi'||x.type==='debit').map(row):h('div',{class:'empty'},'No debits recorded this month.')),
+    h('p',{class:'note'},'Record salary, EMIs and other credits or debits here. This ledger is separate from expense categories and budgets.'));
+}
 function viewBudgets(){
-  const total=r2(data.categories.reduce((a,c)=>a+c.budget,0));
+  const coupleMode=data.settings.trackerMode==='couple';
+  const scope=coupleMode?'couple':'single';
+  const total=r2(data.categories.reduce((a,c)=>a+budgetFor(scope,c.id),0));
   return h('div',{},
-    h('section',{class:'card hero'},h('small',{},'Total monthly budget'),h('div',{class:'big',style:{marginBottom:0}},fmt(total))),
-    h('section',{class:'card'},h('h3',{},'Categories & budgets'),
-      data.categories.map(c=>h('button',{class:'row-item',type:'button',onclick:()=>openCategory(c)},
+    h('section',{class:'card hero'},h('small',{},coupleMode?'Total monthly couple budget':'Total monthly budget'),h('div',{class:'big',style:{marginBottom:0}},fmt(total))),
+    h('section',{class:'card'},h('h3',{},coupleMode?'Couple category budgets':'Categories & budgets'),
+      data.categories.map(c=>{const b=budgetFor(scope,c.id);return h('button',{class:'row-item',type:'button',onclick:()=>openCategory(c,scope)},
         h('span',{class:'ico',style:{background:c.color+'26'}},c.emoji),
-        h('span',{class:'mid'},h('b',{},c.name),h('small',{},c.budget>0?'Tap to edit':'No budget set')),
-        h('b',{class:'amt'},c.budget>0?fmt(c.budget):'—'))),
-      h('div',{class:'row'},h('button',{class:'btn ghost',type:'button',onclick:()=>openCategory(null)},'＋ Add category'))));
+        h('span',{class:'mid'},h('b',{},c.name),h('small',{},b>0?'Tap to edit':'No budget set')),
+        h('b',{class:'amt'},b>0?fmt(b):'—'))}),
+      h('div',{class:'row'},h('button',{class:'btn ghost',type:'button',onclick:()=>openCategory(null,scope)},'＋ Add category'))));
 }
 
 /* ================= settings, backup, folder ================= */
@@ -911,6 +1084,12 @@ function viewSettings(){
     installEvt?h('section',{class:'card'},h('h3',{},'📲 Install as an app'),
       h('p',{class:'note',style:{margin:'0 0 10px'}},'Add Expense Tracker to your desktop or home screen. It opens in its own window and works offline.'),
       h('button',{class:'btn primary',type:'button',onclick:async()=>{installEvt.prompt();try{await installEvt.userChoice}catch(e){}installEvt=null;render()}},'Install app')):null,
+    h('section',{class:'card'},h('h3',{},'Tracker type'),
+      h('p',{class:'note',style:{margin:'0 0 10px'}},'Choose Single or Couple mode. Couple mode keeps the same screens and features, with an additional Paid by field when recording expenses.'),
+      h('div',{class:'tracker-switch'},
+        h('button',{type:'button',class:data.settings.trackerMode==='single'?'on':'',onclick:()=>{data.settings.trackerMode='single';ui.tab='home';commit()}},'👤 Single tracker'),
+        h('button',{type:'button',class:data.settings.trackerMode==='couple'?'on':'',onclick:()=>{data.settings.trackerMode='couple';ui.tab='home';commit();if(!coupleGroup())openCoupleSetup()}},'💑 Couple tracker')),
+      data.settings.trackerMode==='couple'?h('p',{class:'note'},'Couple mode is active. The interface and budgets remain the same; expense entries include a Paid by field.'):null),
     h('section',{class:'card'},h('h3',{},'Appearance'),theme,lbl('Currency symbol',{display:'block',fontSize:'12px',fontWeight:700,color:'var(--muted)',margin:'16px 0 6px',textTransform:'uppercase'}),cur),
     h('section',{class:'card'},h('h3',{},'👤 Users on this device'),
       accounts.users.map(u=>h('button',{class:'row-item',type:'button',onclick:()=>u.id===me.id?openAccount(u,{}):toast('Switch to that user to edit their account')},
@@ -934,13 +1113,17 @@ function viewSettings(){
       h('button',{class:'btn outline-danger',type:'button',onclick:async()=>{
         if(await ask('Delete all your expenses?',`This removes ${data.expenses.length} personal expenses. Budgets and split groups stay.`,'Delete everything',true)){data.expenses=[];commit();toast('All expenses deleted')}}},'Delete all my expenses')));
 }
-const TABS=[['home','Home','🏠',viewHome],['history','History','🧾',viewHistory],['split','Split','🤝',viewSplit],['budgets','Budgets','🎯',viewBudgets],['settings','Settings','⚙️',viewSettings]];
+const TABS=[['home','Home','🏠',viewHome],['history','History','🧾',viewHistory],['ledger','Month ledger','💳',viewMonthLedger],['split','Split','🤝',viewSplit],['budgets','Budgets','🎯',viewBudgets],['settings','Settings','⚙️',viewSettings]];
 function render(){
   if(!me||!data)return;
-  $('#tabs').replaceChildren(...TABS.map(([id,l,ic])=>h('button',{class:'tab'+(ui.tab===id?' on':''),type:'button','aria-current':ui.tab===id?'page':null,onclick:()=>{ui.tab=id;if(id!=='split')ui.group=null;render();window.scrollTo(0,0)}},h('span',{},ic),l)));
-  $('#view').replaceChildren(TABS.find(t=>t[0]===ui.tab)[3]());
+  const couple=data.settings.trackerMode==='couple';
+  const navTabs=TABS.map(([id,label,icon,view])=>[id,label,icon,(couple&&id==='home')?viewCouple:view]);
+  $('#tabs').classList.remove('couple-nav');
+  $('#tabs').replaceChildren(...navTabs.map(([id,l,ic])=>h('button',{class:'tab'+(ui.tab===id?' on':''),type:'button','aria-current':ui.tab===id?'page':null,onclick:()=>{ui.tab=id;if(id!=='split')ui.group=null;render();window.scrollTo(0,0)}},h('span',{},ic),l)));
+  $('#view').replaceChildren(navTabs.find(t=>t[0]===ui.tab)?.[3]?.()||viewHome());
   $('#me').textContent=me.emoji;$('#me').style.background=me.color+'2e';
-  $('#fab').setAttribute('aria-label',ui.tab==='split'?'Add shared expense':'Add expense');
+  $('#fab').style.display='grid';
+  $('#fab').setAttribute('aria-label',ui.tab==='split'?'Add shared expense':ui.tab==='ledger'?'Add ledger entry':'Add expense');
   renderStatus();
 }
 function renderStatus(){
@@ -958,7 +1141,7 @@ window.addEventListener('appinstalled',()=>{installEvt=null;toast('App installed
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
-$('#fab').addEventListener('click',()=>{if(ui.tab==='split')openSplit(null,ui.group);else openExpense(null)});
+$('#fab').addEventListener('click',()=>{if(ui.tab==='split')openSplit(null,ui.group);else if(ui.tab==='ledger')openLedgerEntry(null);else openExpense(null)});
 $('#me').addEventListener('click',openMeMenu);
 boot();
 })();
