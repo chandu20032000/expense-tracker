@@ -311,7 +311,7 @@ function cleanShared(o){
     .filter(x=>x.id&&gid.has(x.groupId)&&pid.has(x.from)&&pid.has(x.to)&&x.from!==x.to&&dateRe.test(x.date)&&x.amount>0);
   return{version:1,updatedAt:+o.updatedAt||0,people,groups,expenses,settlements,coupleGroupId:gid.has(o.coupleGroupId)?String(o.coupleGroupId):(groups.find(g=>g.kind==='couple'&&g.memberIds.length===2)?.id||null)};
 }
-const ui={tab:'home',budgetScope:'single',month:monthOf(todayStr()),q:'',cat:'',all:false,group:null};
+const ui={tab:'home',budgetScope:'single',month:monthOf(todayStr()),q:'',cat:'',quotaPerson:'',all:false,group:null};
 const cat=id=>data.categories.find(c=>c.id===id)||{id:'',name:'Uncategorised',emoji:'❓',color:'#94a3b8',budget:0};
 const fmt=n=>(data?data.settings.currency:'₹')+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
 const fmtP=p=>fmt(p/100);
@@ -709,7 +709,7 @@ function viewCouple(){
             return h('div',{style:{display:'grid',gap:'4px',padding:'7px 0',borderBottom:'1px solid var(--line)'}},
               h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}},
                 h('span',{style:{display:'flex',alignItems:'center',gap:'8px'}},pav(x.id),h('span',{},x.id===myPerson().id?'You':person(x.id).name)),
-                h('b',{},`Spent ${fmt(used)}`)),
+                h('button',{type:'button',class:'spent-link',style:{border:0,background:'transparent',padding:'6px 0',font:'inherit',fontWeight:800,color:'var(--text)',cursor:'pointer'},'aria-label':`Show ${fmt(used)} expenses for ${x.id===myPerson().id?'You':person(x.id).name} in ${c.name}`,onclick:()=>{ui.tab='history';ui.month=monthOf(todayStr());ui.all=false;ui.cat=c.id;ui.quotaPerson=x.id;ui.q='';render();window.scrollTo(0,0)}},`Spent ${fmt(used)}`)),
               h('small',{style:{color:'var(--muted)'}},`Quota ${fmt(quota)} · Remaining ${fmt(remaining)}`));
           })))
     }):h('div',{class:'empty'},'Add category budgets to see them here.'));
@@ -915,10 +915,14 @@ function monthBar(){
     h('button',{class:'icon-btn',type:'button','aria-label':'Next month',onclick:()=>shiftMonth(1)},'›'));
 }
 function expRow(e){
-  const c=cat(e.categoryId);
+  const c=cat(e.categoryId),couple=data.settings.trackerMode==='couple';
+  const details=couple
+    ? c.name+' · '+e.method+' · Paid by '+(e.paidBy?pname(e.paidBy):me.name)+' · Quota: '+pname(e.quotaFrom||e.paidBy||'')
+    : c.name+' · '+e.method;
   return h('button',{class:'row-item',type:'button',onclick:()=>openExpense(e)},
     h('span',{class:'ico',style:{background:c.color+'26'}},c.emoji),
-    h('span',{class:'mid'},h('b',{},e.note||c.name),h('small',{},c.name+' · '+e.method+(data.settings.trackerMode==='couple'?' · Paid by '+(e.paidBy?(pname(e.paidBy)):me.name):''))),h('b',{class:'amt'},'−'+fmt(e.amount)));
+    h('span',{class:'mid'},h('b',{},e.note||c.name),h('small',{},details)),
+    h('b',{class:'amt'},'−'+fmt(e.amount)));
 }
 function donut(parts,total){
   const svg=s('svg',{viewBox:'0 0 42 42',class:'donut',role:'img','aria-label':'Spending by category'});
@@ -966,10 +970,12 @@ function viewHistory(){
   const sel=h('select',{class:'inp','aria-label':'Category filter',onchange:e=>{ui.cat=e.target.value;paint()}},
     h('option',{value:''},'All categories'),data.categories.map(c=>h('option',{value:c.id,selected:ui.cat===c.id},c.emoji+' '+c.name)));
   const all=h('button',{class:'chip'+(ui.all?' on':''),type:'button',onclick:()=>{ui.all=!ui.all;render()}},ui.all?'✓ All months':'All months');
+  const quotaSel=data.settings.trackerMode==='couple'?h('select',{class:'inp','aria-label':'Quota member filter',onchange:e=>{ui.quotaPerson=e.target.value;paint()}},
+    h('option',{value:''},'All quota members'),(coupleGroup()?.memberIds||[]).map(id=>{const p=person(id);return h('option',{value:p.id,selected:ui.quotaPerson===p.id},p.id===myPerson().id?'You':p.name)})):null;
   const out=h('div');
   function paint(){
     const term=ui.q.trim().toLowerCase();
-    const rows=data.expenses.filter(e=>(ui.all||monthOf(e.date)===ui.month)&&(!ui.cat||e.categoryId===ui.cat)&&(!term||(e.note+' '+cat(e.categoryId).name).toLowerCase().includes(term)))
+    const rows=data.expenses.filter(e=>(ui.all||monthOf(e.date)===ui.month)&&(!ui.cat||e.categoryId===ui.cat)&&(!ui.quotaPerson||(e.quotaFrom||e.paidBy)===ui.quotaPerson)&&(!term||(e.note+' '+cat(e.categoryId).name).toLowerCase().includes(term)))
       .sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
     if(!rows.length){out.replaceChildren(h('div',{class:'card empty'},h('div',{class:'e'},'🧾'),'No expenses found.'));return}
     const groups=new Map();rows.forEach(e=>{if(!groups.has(e.date))groups.set(e.date,[]);groups.get(e.date).push(e)});
@@ -977,7 +983,7 @@ function viewHistory(){
       ...[...groups].map(([d,es])=>h('div',{},h('div',{class:'day'},h('span',{},dayLabel(d)),h('span',{},fmt(sum(es)))),h('div',{class:'card',style:{padding:'4px 16px',marginBottom:'4px'}},es.map(expRow)))));
   }
   paint();
-  return h('div',{},ui.all?h('div',{style:{height:'4px'}}):monthBar(),h('div',{class:'filters'},q,sel),h('div',{class:'chiprow',style:{marginBottom:'8px'}},all),out);
+  return h('div',{},ui.all?h('div',{style:{height:'4px'}}):monthBar(),h('div',{class:'filters'},q,sel,quotaSel),h('div',{class:'chiprow',style:{marginBottom:'8px'}},all),out);
 }
 function openLedgerEntry(entry){
   const st={type:entry?entry.type:'salary'};
