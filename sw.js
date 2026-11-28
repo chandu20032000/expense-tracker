@@ -1,4 +1,4 @@
-const CACHE_NAME = 'expense-tracker-local-v1';
+const CACHE_NAME = 'expense-tracker-local-v2';
 const APP_FILES = [
   './',
   './index.html',

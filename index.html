@@ -13,7 +13,7 @@
 <title>Expense Tracker</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%B0%3C/text%3E%3C/svg%3E">
 <style>
-:root{--bg:#f4f5fb;--card:#fff;--ink:#14162b;--muted:#6b7090;--line:#e8eaf3;--soft:#eef0fb;--accent:#5b5bf0;--accent2:#8b5cf6;--good:#10b981;--bad:#ef4444;--shadow:0 8px 28px rgba(30,30,90,.08);--r:20px}
+:root{--bg:#f4f5fb;--card:#fff;--ink:#14162b;--muted:#6b7090;--line:#e8eaf3;--soft:#eef0fb;--accent:#5b5bf0;--accent2:#8b5cf6;--good:#10b981;--bad:#ef4444;--shadow:0 8px 28px rgba(30,30,90,.08);--r:20px;--surface:var(--card);--text:var(--ink)}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0e1020;--card:#171a31;--ink:#eef0ff;--muted:#9aa0c4;--line:#262a4a;--soft:#1f2342;--shadow:0 8px 28px rgba(0,0,0,.35)}}
 :root[data-theme=dark]{--bg:#0e1020;--card:#171a31;--ink:#eef0ff;--muted:#9aa0c4;--line:#262a4a;--soft:#1f2342;--shadow:0 8px 28px rgba(0,0,0,.35)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -154,6 +154,28 @@ body[data-mode=gate] .app,body[data-mode=gate] #fab{display:none}
  .app{padding-bottom:120px}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.stats.four{grid-template-columns:1fr 1fr}
+@media(min-width:560px){.stats.four{grid-template-columns:repeat(4,1fr)}}
+.typegrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.typebtn{padding:12px 8px;border-radius:14px;background:var(--soft);font-weight:700;font-size:14px;border:2px solid transparent;text-align:center}
+.typebtn.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--card))}
+.switchrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border-radius:16px;background:var(--soft);width:100%;text-align:left;font-weight:700}
+.switchrow small{font-size:12px}
+.switch{width:46px;height:28px;border-radius:99px;background:var(--line);position:relative;flex:none;transition:.2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.switch.on{background:var(--accent)}.switch.on::after{left:21px}
+.searchbox{position:relative}
+.searchbox .inp{padding-left:42px}
+.searchbox .si{position:absolute;left:15px;top:50%;transform:translateY(-50%);pointer-events:none}
+.monthhead{display:flex;justify-content:space-between;align-items:center;padding:14px 4px 6px;font-weight:700;color:var(--muted);font-size:13px}
+.monthbtn{display:flex;flex-direction:column;align-items:center;line-height:1.2;padding:4px 14px;border-radius:14px;min-width:0}
+.monthbtn b{font-size:18px}.monthbtn small{font-size:11px;color:var(--muted);font-weight:600}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mgrid button{padding:14px 6px;border-radius:14px;background:var(--soft);font-weight:700;border:2px solid transparent}
+.mgrid button.on{background:var(--accent);color:#fff}.mgrid button.now{border-color:var(--accent)}
+.chiprow.scroll{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.chiprow.scroll::-webkit-scrollbar{display:none}.chiprow.scroll .chip{flex:none}
+.yrbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.yrbar b{font-size:18px}
 </style>
 </head>
 <body data-mode="gate">
@@ -185,6 +207,10 @@ const pad=n=>String(n).padStart(2,'0');
 const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const todayStr=()=>ymd(new Date());
 const monthOf=d=>d.slice(0,7);
+const MKEY=/^\d{4}-(0[1-9]|1[0-2])$/;
+const monthAdd=(m,n)=>{const[y,mo]=m.split('-').map(Number);const d=new Date(y,mo-1+n,1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}`};
+const monthDiff=(a,b)=>{const[ya,ma]=a.split('-').map(Number),[yb,mb]=b.split('-').map(Number);return(yb-ya)*12+(mb-ma)};
+const daysIn=m=>{const[y,mo]=m.split('-').map(Number);return new Date(y,mo,0).getDate()};
 const r2=n=>Math.round(n*100)/100;
 const P=n=>Math.round(n*100);
 const emo1=(v,d)=>[...String(v||d)].slice(0,2).join('');
@@ -243,7 +269,7 @@ const kvSet=async(k,v)=>{try{const db=await idb();return await new Promise((res,
 let accounts={version:1,users:[]},shared=cleanShared(null),me=null,data=null;
 function freshData(){
   return{app:'expense-tracker',version:1,updatedAt:Date.now(),
-    settings:{currency:'₹',theme:'auto',lastExport:0,trackerMode:'single',coupleBudget:0,singleBudgets:{},coupleBudgets:{},coupleQuotas:{}},
+    settings:{currency:'₹',theme:'auto',lastExport:0,trackerMode:'single',coupleBudget:0,singleBudgets:{},coupleBudgets:{},coupleQuotas:{},monthBudgets:{},ledgerBalance:true},
     categories:DEFAULT_CATS.map(([name,emoji,color,budget])=>({id:uid(),name,emoji,color,budget})),expenses:[],ledgerEntries:[]};
 }
 function cleanBudgetMap(raw,categories,useLegacy){
@@ -251,8 +277,33 @@ function cleanBudgetMap(raw,categories,useLegacy){
   categories.forEach(c=>{const v=Object.prototype.hasOwnProperty.call(src,c.id)?+src[c.id]:(useLegacy?+c.budget:0);out[c.id]=Number.isFinite(v)&&v>0?r2(v):0});
   return out;
 }
-const budgetFor=(scope,id)=>r2(+((scope==='couple'?data.settings.coupleBudgets:data.settings.singleBudgets)||{})[id]||0);
-const quotaFor=(categoryId,memberId)=>r2(+(data.settings.coupleQuotas?.[categoryId]?.[memberId]||0));
+/* Budgets and quotas can differ every month. An override saved for a month carries forward to later months
+   until another override is saved; months before the first override keep the original (base) values. */
+function monthOverride(kind,key,month){
+  const mb=data.settings.monthBudgets||{};
+  const ks=Object.keys(mb).filter(k=>k<=month&&mb[k]&&mb[k][kind]&&Object.prototype.hasOwnProperty.call(mb[k][kind],key)).sort();
+  return ks.length?mb[ks[ks.length-1]][kind][key]:undefined;
+}
+const budgetFor=(scope,id,month=ui.month)=>{
+  const o=monthOverride(scope==='couple'?'couple':'single',id,month);
+  if(o!==undefined)return r2(+o||0);
+  return r2(+((scope==='couple'?data.settings.coupleBudgets:data.settings.singleBudgets)||{})[id]||0);
+};
+const quotaFor=(categoryId,memberId,month=ui.month)=>{
+  const row=monthOverride('quotas',categoryId,month);
+  if(row!==undefined)return r2(+(row&&row[memberId]||0));
+  return r2(+(data.settings.coupleQuotas?.[categoryId]?.[memberId]||0));
+};
+function setMonthValue(kind,key,value,month,onlyThis){
+  const st=data.settings;if(!st.monthBudgets)st.monthBudgets={};
+  const has=m=>!!(st.monthBudgets[m]&&st.monthBudgets[m][kind]&&Object.prototype.hasOwnProperty.call(st.monthBudgets[m][kind],key));
+  const put=(m,v)=>{if(!st.monthBudgets[m])st.monthBudgets[m]={};if(!st.monthBudgets[m][kind])st.monthBudgets[m][kind]={};st.monthBudgets[m][kind][key]=v};
+  let prev;
+  if(kind==='quotas'){const o=monthOverride('quotas',key,month);prev={...(o!==undefined?o:(st.coupleQuotas&&st.coupleQuotas[key])||{})}}
+  else prev=budgetFor(kind,key,month);
+  put(month,value);
+  if(onlyThis){const next=monthAdd(month,1);if(!has(next))put(next,prev)}
+}
 function cleanQuotaMap(raw,categories){
   const out={},src=raw&&typeof raw==='object'?raw:{};
   categories.forEach(c=>{const row=src[c.id]&&typeof src[c.id]==='object'?src[c.id]:{};out[c.id]={};Object.entries(row).forEach(([id,v])=>{const n=+v;if(id&&Number.isFinite(n)&&n>0)out[c.id][id]=r2(n)})});
@@ -262,6 +313,16 @@ function setBudgetFor(scope,id,value){
   const key=scope==='couple'?'coupleBudgets':'singleBudgets';
   if(!data.settings[key])data.settings[key]={};
   data.settings[key][id]=Number.isFinite(+value)&&+value>0?r2(+value):0;
+}
+function cleanMonthBudgets(raw,categories){
+  const src=raw&&typeof raw==='object'?raw:{},out={};
+  Object.keys(src).filter(k=>MKEY.test(k)).slice(0,1200).forEach(k=>{
+    const m=src[k]&&typeof src[k]==='object'?src[k]:{},o={};
+    for(const kind of['single','couple']){if(m[kind]&&typeof m[kind]==='object'){o[kind]={};categories.forEach(c=>{if(Object.prototype.hasOwnProperty.call(m[kind],c.id)){const v=+m[kind][c.id];o[kind][c.id]=Number.isFinite(v)&&v>0?r2(v):0}})}}
+    if(m.quotas&&typeof m.quotas==='object'){o.quotas={};categories.forEach(c=>{const row=m.quotas[c.id];if(row&&typeof row==='object'){const r={};Object.entries(row).forEach(([id,v])=>{const n=+v;if(id&&Number.isFinite(n)&&n>0)r[String(id).slice(0,40)]=r2(n)});o.quotas[c.id]=r}})}
+    out[k]=o;
+  });
+  return out;
 }
 function sanitize(o){
   if(!o||typeof o!=='object'||!Array.isArray(o.expenses)||!Array.isArray(o.categories))throw new Error('Not an expense tracker file');
@@ -278,10 +339,18 @@ function sanitize(o){
     note:String(e&&e.note||'').slice(0,120),method:METHODS.includes(e&&e.method)?e.method:'Other',paidBy:String(e&&e.paidBy||''),quotaFrom:String(e&&e.quotaFrom||e&&e.paidBy||'')
   })).filter(e=>dateRe.test(e.date)&&Number.isFinite(e.amount)&&e.amount>0&&!eseen.has(e.id)&&eseen.add(e.id));
   const lseen=new Set();
-  const ledgerEntries=(Array.isArray(o.ledgerEntries)?o.ledgerEntries:[]).slice(0,100000).map(x=>({id:String(x&&x.id||uid()).slice(0,40),date:String(x&&x.date||''),type:['salary','emi','credit','debit'].includes(x&&x.type)?x.type:'debit',amount:r2(+(x&&x.amount)),note:String(x&&x.note||'').slice(0,120),method:METHODS.includes(x&&x.method)?x.method:'Bank'})).filter(x=>dateRe.test(x.date)&&Number.isFinite(x.amount)&&x.amount>0&&!lseen.has(x.id)&&lseen.add(x.id));
+  const ledgerEntries=(Array.isArray(o.ledgerEntries)?o.ledgerEntries:[]).slice(0,100000).map(x=>{
+    const date=String(x&&x.date||''),sm=dateRe.test(date)?monthOf(date):'';
+    let ru=MKEY.test(x&&x.recurUntil)&&sm&&x.recurUntil>sm?x.recurUntil:'';
+    if(ru&&monthDiff(sm,ru)>600)ru=monthAdd(sm,600);
+    const skip=Array.isArray(x&&x.skip)?[...new Set(x.skip.filter(m=>MKEY.test(m)))].slice(0,1200):[];
+    const over={};
+    if(x&&x.over&&typeof x.over==='object')Object.entries(x.over).filter(([m])=>MKEY.test(m)).slice(0,1200).forEach(([m,v])=>{const a=+(v&&v.amount);over[m]={amount:Number.isFinite(a)&&a>0?r2(a):0,note:v&&v.note!=null?String(v.note).slice(0,120):null}});
+    return{id:String(x&&x.id||uid()).slice(0,40),date,type:['salary','emi','credit','debit'].includes(x&&x.type)?x.type:'debit',amount:r2(+(x&&x.amount)),note:String(x&&x.note||'').slice(0,120),method:METHODS.includes(x&&x.method)?x.method:'Bank',recurUntil:ru,skip,over};
+  }).filter(x=>dateRe.test(x.date)&&Number.isFinite(x.amount)&&x.amount>0&&!lseen.has(x.id)&&lseen.add(x.id));
   const st=o.settings||{};
   return{app:'expense-tracker',version:1,updatedAt:Number.isFinite(+o.updatedAt)?+o.updatedAt:Date.now(),
-    settings:{currency:String(st.currency||'₹').slice(0,3),theme:['auto','light','dark'].includes(st.theme)?st.theme:'auto',lastExport:+st.lastExport||0,trackerMode:st.trackerMode==='couple'?'couple':'single',coupleBudget:Number.isFinite(+st.coupleBudget)&&+st.coupleBudget>0?r2(+st.coupleBudget):0,singleBudgets:cleanBudgetMap(st.singleBudgets,categories,true),coupleBudgets:cleanBudgetMap(st.coupleBudgets,categories,false),coupleQuotas:cleanQuotaMap(st.coupleQuotas,categories)},categories,expenses,ledgerEntries};
+    settings:{currency:String(st.currency||'₹').slice(0,3),theme:['auto','light','dark'].includes(st.theme)?st.theme:'auto',lastExport:+st.lastExport||0,trackerMode:st.trackerMode==='couple'?'couple':'single',coupleBudget:Number.isFinite(+st.coupleBudget)&&+st.coupleBudget>0?r2(+st.coupleBudget):0,singleBudgets:cleanBudgetMap(st.singleBudgets,categories,true),coupleBudgets:cleanBudgetMap(st.coupleBudgets,categories,false),coupleQuotas:cleanQuotaMap(st.coupleQuotas,categories),monthBudgets:cleanMonthBudgets(st.monthBudgets,categories),ledgerBalance:st.ledgerBalance!==false},categories,expenses,ledgerEntries};
 }
 function cleanAccounts(o){
   const b64=/^[A-Za-z0-9+/=]{8,200}$/,seen=new Set();
@@ -311,7 +380,7 @@ function cleanShared(o){
     .filter(x=>x.id&&gid.has(x.groupId)&&pid.has(x.from)&&pid.has(x.to)&&x.from!==x.to&&dateRe.test(x.date)&&x.amount>0);
   return{version:1,updatedAt:+o.updatedAt||0,people,groups,expenses,settlements,coupleGroupId:gid.has(o.coupleGroupId)?String(o.coupleGroupId):(groups.find(g=>g.kind==='couple'&&g.memberIds.length===2)?.id||null)};
 }
-const ui={tab:'home',budgetScope:'single',month:monthOf(todayStr()),q:'',cat:'',quotaPerson:'',all:false,group:null};
+const ui={tab:'home',budgetScope:'single',month:monthOf(todayStr()),q:'',cat:'',quotaPerson:'',all:false,group:null,lq:'',ltype:'',lAll:false};
 const cat=id=>data.categories.find(c=>c.id===id)||{id:'',name:'Uncategorised',emoji:'❓',color:'#94a3b8',budget:0};
 const fmt=n=>(data?data.settings.currency:'₹')+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
 const fmtP=p=>fmt(p/100);
@@ -463,7 +532,7 @@ async function enter(u){
   }catch(e){toast('Could not read your data: '+(e.message||e));return}
   me=u;
   if(!shared.people.some(p=>p.userId===u.id)){shared.people.push({id:uid(),name:u.name,emoji:u.emoji,userId:u.id});save('shared')}
-  ui.tab='home';ui.group=null;ui.month=monthOf(todayStr());ui.q='';ui.cat='';ui.all=false;
+  ui.tab='home';ui.group=null;ui.month=monthOf(todayStr());ui.q='';ui.cat='';ui.all=false;ui.lq='';ui.ltype='';ui.lAll=false;
   applyTheme(data.settings.theme);document.body.dataset.mode='app';window.scrollTo(0,0);render();
 }
 async function lock(){await flushNow();gateUsers()}
@@ -537,7 +606,7 @@ function openExpense(ex,pre){
     if(coupleMode){
       const period=monthOf(date.value||todayStr());
       quotaFrom.replaceChildren(...members.map(id=>{
-        const quota=quotaFor(st.cat,id);
+        const quota=quotaFor(st.cat,id,period);
         const used=sum(data.expenses.filter(e=>e.id!==(ex&&ex.id)&&e.categoryId===st.cat&&monthOf(e.date)===period&&(e.quotaFrom||e.paidBy)===id));
         const left=Math.max(0,r2(quota-used));
         return h('option',{value:id,selected:id===st.quotaFrom},`${pname(id)} · ${quota>0?fmt(left)+' left':'No quota set'}`);
@@ -565,7 +634,7 @@ function openExpense(ex,pre){
   if(!ex)setTimeout(()=>amt.focus(),120);
 }
 function openCategory(c,scope='single'){
-  const st={color:c?c.color:COLORS[data.categories.length%COLORS.length]};
+  const st={color:c?c.color:COLORS[data.categories.length%COLORS.length],apply:'onward'};
   const name=h('input',{class:'inp',maxlength:'40',placeholder:'e.g. Pets',value:c?c.name:''});
   const emoji=h('input',{class:'inp',maxlength:'4',placeholder:'🏷️',value:c?c.emoji:'',style:{width:'90px',textAlign:'center',fontSize:'22px'}});
   const budget=h('input',{class:'inp',inputmode:'decimal',placeholder:'0',value:c?String(budgetFor(scope,c.id)):''});
@@ -577,9 +646,11 @@ function openCategory(c,scope='single'){
   }
   const sw=h('div',{class:'swatches'});
   const paint=()=>sw.replaceChildren(...COLORS.map(col=>h('button',{type:'button',class:'sw'+(col===st.color?' on':''),'aria-label':'Colour '+col,style:{background:col},onclick:()=>{st.color=col;paint()}})));paint();
+  const applyBox=c?h('div'):null;
+  const paintApply=()=>{if(applyBox)applyBox.replaceChildren(lbl('Apply budget change to'),h('div',{class:'seg',style:{gridTemplateColumns:'1fr 1fr'}},[['onward',shortMonth(ui.month)+' & later'],['only','Only '+shortMonth(ui.month)]].map(([v,l])=>h('button',{type:'button',class:st.apply===v?'on':'',onclick:()=>{st.apply=v;paintApply()}},l))),h('p',{class:'note'},'Earlier months keep their own budgets.'))};paintApply();
   const close=sheet(c?'Edit category':'New category',h('div',{},
     h('div',{style:{display:'flex',gap:'10px'}},h('div',{},lbl('Icon',{marginTop:0}),emoji),h('div',{style:{flex:'1'}},lbl('Name',{marginTop:0}),name)),
-    scope==='couple'&&group?h('div',{},lbl('Allocate category quota by member'),quotaBox,h('p',{class:'note'},'The category budget is calculated from the member quotas below.')):h('div',{},lbl(`Monthly budget (${data.settings.currency})`),budget),lbl('Colour'),sw,
+    scope==='couple'&&group?h('div',{},lbl('Allocate category quota by member'),quotaBox,h('p',{class:'note'},'The category budget is calculated from the member quotas below.')):h('div',{},lbl(`Budget for ${monthLabel(ui.month)} (${data.settings.currency})`),budget),applyBox,lbl('Colour'),sw,
     h('div',{class:'row'},
       c&&data.categories.length>1&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},'aria-label':'Delete category',onclick:async()=>{
         const used=data.expenses.filter(e=>e.categoryId===c.id).length,other=data.categories.find(x=>x.id!==c.id);
@@ -592,9 +663,14 @@ function openCategory(c,scope='single'){
         Object.entries(quotaInputs).forEach(([id,inp])=>{const v=parseFloat(inp.value.replace(/,/g,''));quotaValues[id]=Number.isFinite(v)&&v>0?r2(v):0;quotaTotal+=quotaValues[id]});
         const categoryBudget=scope==='couple'&&group? r2(quotaTotal):(Number.isFinite(b)&&b>0?r2(b):0);
         const rec={name:n.slice(0,40),emoji:emo1(emoji.value.trim(),'🏷️'),color:st.color,budget:categoryBudget};
-        let targetId;
-        if(c){Object.assign(c,{name:rec.name,emoji:rec.emoji,color:rec.color});targetId=c.id;setBudgetFor(scope,c.id,categoryBudget)}else{const added={id:uid(),...rec};data.categories.push(added);targetId=added.id;setBudgetFor('single',added.id,0);setBudgetFor('couple',added.id,0);setBudgetFor(scope,added.id,categoryBudget)}
-        if(scope==='couple'&&group){if(!data.settings.coupleQuotas)data.settings.coupleQuotas={};data.settings.coupleQuotas[targetId]=quotaValues;}
+        let targetId;const onlyThis=st.apply==='only';
+        if(c){Object.assign(c,{name:rec.name,emoji:rec.emoji,color:rec.color});targetId=c.id}
+        else{const added={id:uid(),...rec};data.categories.push(added);targetId=added.id;setBudgetFor('single',added.id,0);setBudgetFor('couple',added.id,0)}
+        const normRow=o=>JSON.stringify(Object.entries(o||{}).filter(([,v])=>+v>0).map(([k2,v])=>[k2,r2(+v)]).sort());
+        if(scope==='couple'&&group){
+          const oldRow={};group.memberIds.forEach(id=>{oldRow[id]=quotaFor(targetId,id)});
+          if(!c?categoryBudget>0:normRow(oldRow)!==normRow(quotaValues)){setMonthValue('couple',targetId,categoryBudget,ui.month,onlyThis);setMonthValue('quotas',targetId,quotaValues,ui.month,onlyThis)}
+        }else if(!c?categoryBudget>0:categoryBudget!==budgetFor(scope,targetId)){setMonthValue(scope,targetId,categoryBudget,ui.month,onlyThis)}
         close();commit();
       }},c?'Save':'Add category'))));
 }
@@ -910,9 +986,20 @@ function viewGroup(g){
 
 /* ================= personal views ================= */
 function monthBar(){
+  const isNow=ui.month===monthOf(todayStr());
   return h('div',{class:'monthbar'},
-    h('button',{class:'icon-btn',type:'button','aria-label':'Previous month',onclick:()=>shiftMonth(-1)},'‹'),h('b',{},monthLabel(ui.month)),
+    h('button',{class:'icon-btn',type:'button','aria-label':'Previous month',onclick:()=>shiftMonth(-1)},'‹'),
+    h('button',{class:'monthbtn',type:'button','aria-label':'Choose month',onclick:openMonthPicker},h('b',{},monthLabel(ui.month)),h('small',{},isNow?'This month · tap to change':'Tap to change month')),
     h('button',{class:'icon-btn',type:'button','aria-label':'Next month',onclick:()=>shiftMonth(1)},'›'));
+}
+function openMonthPicker(){
+  let year=+ui.month.slice(0,4),close;const nowM=monthOf(todayStr()),body=h('div');
+  const go=m=>{ui.month=m;close();render()};
+  const paint=()=>body.replaceChildren(
+    h('div',{class:'yrbar'},h('button',{class:'icon-btn',type:'button','aria-label':'Previous year',onclick:()=>{year--;paint()}},'‹'),h('b',{},String(year)),h('button',{class:'icon-btn',type:'button','aria-label':'Next year',onclick:()=>{year++;paint()}},'›')),
+    h('div',{class:'mgrid'},MONTHS.map((n,i)=>{const m=`${year}-${pad(i+1)}`;return h('button',{type:'button',class:((m===ui.month?'on ':'')+(m===nowM?'now':'')).trim(),onclick:()=>go(m)},n)})),
+    h('div',{class:'row'},h('button',{class:'btn ghost',type:'button',onclick:()=>go(nowM)},'Jump to this month')));
+  paint();close=sheet('Choose month',body);
 }
 function expRow(e){
   const c=cat(e.categoryId),couple=data.settings.trackerMode==='couple';
@@ -985,50 +1072,218 @@ function viewHistory(){
   paint();
   return h('div',{},ui.all?h('div',{style:{height:'4px'}}):monthBar(),h('div',{class:'filters'},q,sel,quotaSel),h('div',{class:'chiprow',style:{marginBottom:'8px'}},all),out);
 }
-function openLedgerEntry(entry){
-  const st={type:entry?entry.type:'salary'};
-  const type=h('select',{class:'inp',value:st.type,onchange:e=>{st.type=e.target.value}},
-    [['salary','Salary credited'],['emi','EMI paid'],['credit','Other credit'],['debit','Other debit']].map(([v,l])=>h('option',{value:v,selected:v===st.type},l)));
-  const amount=h('input',{class:'inp',inputmode:'decimal',placeholder:'Amount',value:entry?String(entry.amount):'',maxlength:'12'});
-  const date=h('input',{class:'inp',type:'date',value:entry?entry.date:todayStr()});
-  const note=h('input',{class:'inp',maxlength:'120',placeholder:'e.g. Monthly salary, Home loan EMI',value:entry?entry.note:''});
-  const method=h('select',{class:'inp',value:entry?entry.method:'Bank'},METHODS.map(m=>h('option',{value:m,selected:m===(entry?entry.method:'Bank')},m)));
-  const close=sheet(entry?'Edit month ledger entry':'Add month ledger entry',h('div',{class:'stack'},
-    lbl('Transaction type'),type,lbl('Amount'),amount,lbl('Date'),date,lbl('Description'),note,lbl('Payment method'),method,
-    h('div',{class:'row'},entry&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},onclick:async()=>{if(await ask('Delete entry?','This ledger entry will be removed.','Delete',true)){data.ledgerEntries=data.ledgerEntries.filter(x=>x.id!==entry.id);close();commit()}}},'🗑️'),
-      h('button',{class:'btn primary',type:'button',onclick:()=>{const v=r2(parseFloat(amount.value.replace(/,/g,'')));if(!Number.isFinite(v)||v<=0||v>=1e9){toast('Enter a valid amount');amount.focus();return}if(!dateRe.test(date.value)){toast('Pick a date');return}const rec={id:entry?entry.id:uid(),date:date.value,type:type.value,amount:v,note:note.value.trim(),method:method.value};if(entry)data.ledgerEntries=data.ledgerEntries.map(x=>x.id===entry.id?rec:x);else data.ledgerEntries.push(rec);close();commit();toast('Month ledger updated')}},entry?'Save changes':'Add entry'))));
+/* ================= month ledger: recurring entries, carried balance, search ================= */
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const LTYPES=[['salary','Salary credited','💰'],['emi','EMI paid','🏦'],['credit','Other credit','⬆️'],['debit','Other debit','⬇️']];
+const lLabel=t=>(LTYPES.find(x=>x[0]===t)||LTYPES[3])[1];
+const lIcon=t=>(LTYPES.find(x=>x[0]===t)||LTYPES[3])[2];
+const isCredit=t=>t==='salary'||t==='credit';
+const shortMonth=m=>MONTHS[+m.slice(5)-1]+' '+m.slice(0,4);
+
+/* One ledger entry may repeat every month until `recurUntil` (YYYY-MM). Each month's copy is an
+   "occurrence"; a single month can be skipped (entry.skip) or have its own amount/note (entry.over). */
+function ledgerOccurrences(e,fromM,toM){
+  const start=monthOf(e.date),end=e.recurUntil&&e.recurUntil>start?e.recurUntil:start;
+  const lo=fromM&&fromM>start?fromM:start,hi=toM&&toM<end?toM:end,out=[];
+  if(lo>hi)return out;
+  const n=Math.min(monthDiff(lo,hi),1200),day=+e.date.slice(8);
+  for(let i=0;i<=n;i++){
+    const m=monthAdd(lo,i);
+    if(e.skip.includes(m))continue;
+    const ov=e.over[m];
+    out.push({id:e.id+'@'+m,entry:e,month:m,date:m===start?e.date:`${m}-${pad(Math.min(day,daysIn(m)))}`,type:e.type,
+      amount:ov&&ov.amount>0?ov.amount:e.amount,note:ov&&ov.note!=null?ov.note:e.note,method:e.method,recurring:end>start,over:!!ov});
+  }
+  return out;
+}
+const allOccurrences=(fromM,toM)=>(data.ledgerEntries||[]).flatMap(e=>ledgerOccurrences(e,fromM,toM));
+function expensesByMonth(){
+  const mp=myPerson()&&myPerson().id,map=new Map();
+  data.expenses.forEach(e=>{if(e.paidBy&&mp&&e.paidBy!==mp)return;const m=monthOf(e.date);map.set(m,(map.get(m)||0)+P(e.amount))});
+  return map;
+}
+/* Opening balance = everything credited − debited − spent in all earlier months, starting from the first ledger entry. */
+function ledgerSummary(M){
+  const entries=data.ledgerEntries||[],sub=data.settings.ledgerBalance!==false;
+  const first=entries.reduce((a,e)=>{const m=monthOf(e.date);return!a||m<a?m:a},'');
+  const exp=sub?expensesByMonth():new Map(),flow=new Map();
+  allOccurrences(null,M).forEach(o=>{const t=flow.get(o.month)||{cr:0,db:0};if(isCredit(o.type))t.cr+=P(o.amount);else t.db+=P(o.amount);flow.set(o.month,t)});
+  let opening=0;
+  if(first&&first<M){const n=Math.min(monthDiff(first,M),1200);for(let i=0;i<n;i++){const m=monthAdd(first,i),t=flow.get(m)||{cr:0,db:0};opening+=t.cr-t.db-(exp.get(m)||0)}}
+  const cur=flow.get(M)||{cr:0,db:0},spent=sub&&first&&first<=M?(exp.get(M)||0):0;
+  return{first,sub,opening:opening/100,credited:cur.cr/100,debited:cur.db/100,spent:spent/100,closing:(opening+cur.cr-cur.db-spent)/100};
+}
+function openLedgerEntry(entry,occ){
+  const series=!!(entry&&entry.recurUntil);
+  const startM=entry?monthOf(entry.date):ui.month,occM=occ?occ.month:startM;
+  const isFirst=!series||occM===startM,day=entry?+entry.date.slice(8):1;
+  const st={type:entry?entry.type:'salary',method:entry?entry.method:'Bank',scope:series?(isFirst?'all':'only'):'all',repeat:series,until:series?entry.recurUntil:''};
+  const amt=h('input',{class:'amount',inputmode:'decimal',placeholder:'0',autocomplete:'off','aria-label':'Amount',maxlength:'12',value:entry?String(occ?occ.amount:entry.amount):''});
+  const date=h('input',{class:'inp',type:'date',value:entry?entry.date:(ui.month===monthOf(todayStr())?todayStr():`${ui.month}-01`),oninput:()=>paint()});
+  const note=h('input',{class:'inp',maxlength:'120',placeholder:'e.g. Monthly salary, Home loan EMI',value:entry?(occ?occ.note:entry.note):''});
+  const dyn=h('div');
+  const newStart=()=>st.scope==='from'?occM:(dateRe.test(date.value)?monthOf(date.value):startM);
+  function untilBox(){
+    const sm=newStart();
+    if(!st.until)st.until=monthAdd(sm,11);
+    const uy=+st.until.slice(0,4),um=+st.until.slice(5),y0=Math.min(+sm.slice(0,4),uy);
+    const ySel=h('select',{class:'inp','aria-label':'Repeat until year',onchange:e=>{st.until=`${e.target.value}-${pad(um)}`;paint()}},Array.from({length:32},(_,i)=>y0+i).map(y=>h('option',{value:y,selected:y===uy},y)));
+    const mSel=h('select',{class:'inp','aria-label':'Repeat until month',onchange:e=>{st.until=`${uy}-${pad(+e.target.value)}`;paint()}},MONTHS.map((n,i)=>h('option',{value:i+1,selected:i+1===um},n)));
+    const count=monthDiff(sm,st.until)+1;
+    return h('div',{},
+      h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginTop:'10px'}},mSel,ySel),
+      h('div',{class:'chiprow',style:{marginTop:'10px'}},[[6,'6 months'],[12,'1 year'],[24,'2 years'],[60,'5 years']].map(([n,l])=>h('button',{type:'button',class:'chip'+(st.until===monthAdd(sm,n-1)?' on':''),onclick:()=>{st.until=monthAdd(sm,n-1);paint()}},l))),
+      h('p',{class:'note'+(count<2?' neg':'')},count>1?`🔁 ${count} entries · ${shortMonth(sm)} → ${shortMonth(st.until)}`:'⚠ The end month must be after the start month'));
+  }
+  function paint(){
+    const parts=[];
+    if(series){
+      const opts=[['only','Only '+shortMonth(occM)],...(isFirst?[]:[['from','This & following']]),['all','Whole series']];
+      parts.push(lbl('Apply changes to',{marginTop:0}),h('div',{class:'seg'+(opts.length===3?'':'')},opts.map(([v,l])=>h('button',{type:'button',class:st.scope===v?'on':'',onclick:()=>{st.scope=v;paint()}},l))),
+        h('p',{class:'note'},'Repeats monthly until '+shortMonth(entry.recurUntil)+'.'));
+    }
+    if(st.scope!=='only')parts.push(lbl('Type',series?undefined:{marginTop:0}),h('div',{class:'typegrid'},LTYPES.map(([v,l,ic])=>h('button',{type:'button',class:'typebtn'+(st.type===v?' on':''),onclick:()=>{st.type=v;paint()}},ic+' '+l))));
+    if(st.scope==='all'&&isFirst)parts.push(lbl('Date'),date);
+    parts.push(lbl('Description'),note);
+    if(st.scope!=='only'){
+      parts.push(lbl('Payment method'),h('div',{class:'chiprow'},METHODS.map(m=>h('button',{type:'button',class:'chip'+(m===st.method?' on':''),onclick:()=>{st.method=m;paint()}},m))));
+      parts.push(h('button',{type:'button',class:'switchrow',style:{marginTop:'14px'},role:'switch','aria-checked':st.repeat?'true':'false',onclick:()=>{st.repeat=!st.repeat;if(st.repeat&&!st.until)st.until=monthAdd(newStart(),11);paint()}},
+        h('span',{},'🔁 Repeat every month',h('small',{class:'muted',style:{display:'block',fontWeight:500}},'Shows up in each following month until the month you choose')),h('span',{class:'switch'+(st.repeat?' on':'')})));
+      if(st.repeat)parts.push(untilBox());
+    }
+    dyn.replaceChildren(...parts);
+  }
+  const doSave=()=>{
+    const v=r2(parseFloat(amt.value.replace(/,/g,'')));
+    if(!Number.isFinite(v)||v<=0||v>=1e9){toast('Enter a valid amount');amt.focus();return}
+    const nt=note.value.trim().slice(0,120);
+    if(entry&&series&&st.scope==='only'){
+      if(v===entry.amount&&nt===entry.note)delete entry.over[occM];else entry.over[occM]={amount:v,note:nt};
+      close();commit();toast(shortMonth(occM)+' updated');return;
+    }
+    if(st.scope==='all'&&!dateRe.test(date.value)){toast('Pick a date');return}
+    const sm=newStart(),until=st.repeat?st.until:'';
+    if(st.repeat&&!(until>sm)){toast('Pick an end month after the start month');return}
+    if(!entry){
+      data.ledgerEntries.push({id:uid(),date:date.value,type:st.type,amount:v,note:nt,method:st.method,recurUntil:until,skip:[],over:{}});
+      if(monthOf(date.value)!==ui.month)ui.month=monthOf(date.value);
+      close();commit();toast(until?'Recurring entry added':'Ledger entry added');return;
+    }
+    if(series&&st.scope==='from'){
+      const nd=`${occM}-${pad(Math.min(day,daysIn(occM)))}`;
+      const next={id:uid(),date:nd,type:st.type,amount:v,note:nt,method:st.method,recurUntil:until,skip:entry.skip.filter(m=>m>=occM),over:{}};
+      entry.recurUntil=monthAdd(occM,-1)>startM?monthAdd(occM,-1):'';
+      entry.skip=entry.skip.filter(m=>m<occM);
+      entry.over=Object.fromEntries(Object.entries(entry.over).filter(([m])=>m<occM));
+      data.ledgerEntries.push(next);
+      close();commit();toast('Updated from '+shortMonth(occM)+' onward');return;
+    }
+    Object.assign(entry,{type:st.type,amount:v,note:nt,method:st.method,recurUntil:until});
+    if(isFirst)entry.date=date.value;
+    entry.skip=entry.skip.filter(m=>!until||m<=until);
+    close();commit();toast('Ledger updated');
+  };
+  const doDelete=async()=>{
+    if(!series){if(await ask('Delete entry?','This ledger entry will be removed.','Delete',true)){data.ledgerEntries=data.ledgerEntries.filter(x=>x.id!==entry.id);close();commit()}return}
+    let c2;
+    const pick=(fn,msg)=>()=>{fn();c2();close();commit();toast(msg)};
+    c2=sheet('Delete recurring entry',h('div',{class:'stack'},
+      h('p',{class:'muted',style:{margin:0}},`“${entry.note||lLabel(entry.type)}” repeats every month until ${shortMonth(entry.recurUntil)}.`),
+      h('button',{class:'btn ghost',type:'button',onclick:pick(()=>{if(!entry.skip.includes(occM))entry.skip.push(occM)},shortMonth(occM)+' removed')},'Only '+shortMonth(occM)),
+      !isFirst?h('button',{class:'btn ghost',type:'button',onclick:pick(()=>{entry.recurUntil=monthAdd(occM,-1)>startM?monthAdd(occM,-1):'';entry.skip=entry.skip.filter(m=>m<occM);entry.over=Object.fromEntries(Object.entries(entry.over).filter(([m])=>m<occM))},'Removed from '+shortMonth(occM)+' onward')},'This & following months'):null,
+      h('button',{class:'btn danger',type:'button',onclick:pick(()=>{data.ledgerEntries=data.ledgerEntries.filter(x=>x.id!==entry.id)},'Series deleted')},'Entire series'),
+      h('button',{class:'btn link',type:'button',onclick:()=>c2()},'Cancel')));
+  };
+  amt.addEventListener('keydown',e=>{if(e.key==='Enter')doSave()});
+  const close=sheet(entry?'Edit ledger entry':'New ledger entry',h('div',{},
+    h('div',{class:'amountbox'},h('span',{},data.settings.currency),amt),dyn,
+    h('div',{class:'row'},entry&&h('button',{class:'btn outline-danger',type:'button',style:{width:'auto'},'aria-label':'Delete entry',onclick:doDelete},'🗑️'),
+      h('button',{class:'btn primary',type:'button',onclick:doSave},entry?'Save changes':'Add entry'))));
+  paint();
+  if(!entry)setTimeout(()=>amt.focus(),120);
+}
+function ledgerMatch(o,term){
+  if(!term)return true;
+  const hay=[o.note,lLabel(o.type),o.method,String(o.amount),fmt(o.amount),o.date,shortMonth(o.month),dayLabel(o.date)].join(' ').toLowerCase();
+  return term.split(/\s+/).every(w=>hay.includes(w));
 }
 function viewMonthLedger(){
-  const rows=(data.ledgerEntries||[]).filter(x=>monthOf(x.date)===ui.month).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
-  const credited=sum(rows.filter(x=>x.type==='salary'||x.type==='credit'));
-  const debited=sum(rows.filter(x=>x.type==='emi'||x.type==='debit'));
-  const net=r2(credited-debited);
-  const label=x=>({salary:'Salary credited',emi:'EMI paid',credit:'Other credit',debit:'Other debit'}[x.type]);
-  const row=x=>h('button',{class:'row-item',type:'button',onclick:()=>openLedgerEntry(x)},
-    h('span',{class:'ico',style:{background:(x.type==='salary'||x.type==='credit'?'#10b981':'#ef4444')+'22'}},({salary:'💰',emi:'🏦',credit:'⬆️',debit:'⬇️'})[x.type]),
-    h('span',{class:'mid'},h('b',{},x.note||label(x)),h('small',{},`${label(x)} · ${dayLabel(x.date)} · ${x.method}`)),
-    h('b',{class:'amt',style:{color:x.type==='salary'||x.type==='credit'?'var(--good)':'var(--bad)'}},(x.type==='salary'||x.type==='credit'?'+':'−')+fmt(x.amount)));
-  return h('div',{},monthBar(),
-    h('section',{class:'card hero'},h('small',{},'Month closing balance · net flow'),h('div',{class:'big'},(net<0?'−':'')+fmt(Math.abs(net))),
-      h('div',{class:'stats'},h('div',{},h('small',{},'Credited'),h('b',{},fmt(credited))),h('div',{},h('small',{},'Debited'),h('b',{},fmt(debited))),h('div',{},h('small',{},'Entries'),h('b',{},String(rows.length))))),
-    h('section',{class:'card'},h('div',{class:'row',style:{alignItems:'center'}},h('h3',{style:{margin:0}},'Money in'),h('b',{style:{color:'var(--good)'}},'+'+fmt(credited))),
-      rows.filter(x=>x.type==='salary'||x.type==='credit').length?rows.filter(x=>x.type==='salary'||x.type==='credit').map(row):h('div',{class:'empty'},'No credits recorded this month.')),
-    h('section',{class:'card'},h('div',{class:'row',style:{alignItems:'center'}},h('h3',{style:{margin:0}},'Money out'),h('b',{style:{color:'var(--bad)'}},'−'+fmt(debited))),
-      rows.filter(x=>x.type==='emi'||x.type==='debit').length?rows.filter(x=>x.type==='emi'||x.type==='debit').map(row):h('div',{class:'empty'},'No debits recorded this month.')),
-    h('p',{class:'note'},'Record salary, EMIs and other credits or debits here. This ledger is separate from expense categories and budgets.'));
+  const search=h('input',{class:'inp',type:'search',placeholder:'Search note, type, amount, method…',value:ui.lq,'aria-label':'Search ledger',oninput:e=>{ui.lq=e.target.value;paint()}});
+  const typeChips=[['','All'],['salary','💰 Salary'],['emi','🏦 EMI'],['credit','⬆️ Credit'],['debit','⬇️ Debit']];
+  const chips=h('div',{class:'chiprow scroll',style:{margin:'10px 0 4px'}},
+    typeChips.map(([v,l])=>h('button',{type:'button',class:'chip'+(ui.ltype===v?' on':''),onclick:()=>{ui.ltype=v;render()}},l)));
+  const toggles=h('div',{class:'chiprow',style:{marginBottom:'12px'}},
+    h('button',{type:'button',class:'chip'+(ui.lAll?' on':''),onclick:()=>{ui.lAll=!ui.lAll;render()}},ui.lAll?'✓ All months':'📅 All months'),
+    h('button',{type:'button',class:'chip'+(data.settings.ledgerBalance!==false?' on':''),onclick:()=>{data.settings.ledgerBalance=data.settings.ledgerBalance===false;commit()}},data.settings.ledgerBalance!==false?'✓ Expenses deducted':'Expenses not deducted'));
+  const out=h('div');
+  const row=o=>h('button',{class:'row-item',type:'button',onclick:()=>openLedgerEntry(o.entry,o)},
+    h('span',{class:'ico',style:{background:(isCredit(o.type)?'#10b981':'#ef4444')+'22'}},lIcon(o.type)),
+    h('span',{class:'mid'},h('b',{},o.note||lLabel(o.type)),h('small',{},`${lLabel(o.type)} · ${dayLabel(o.date)} · ${o.method}`+(o.recurring?' · 🔁 monthly':'')+(o.over?' · edited':''))),
+    h('b',{class:'amt',style:{color:isCredit(o.type)?'var(--good)':'var(--bad)'}},(isCredit(o.type)?'+':'−')+fmt(o.amount)));
+  const section=(title,list,color,sign)=>h('section',{class:'card'},
+    h('div',{class:'row',style:{alignItems:'center',justifyContent:'space-between',marginTop:0}},h('h3',{style:{margin:0}},title),h('b',{style:{color}},sign+fmt(sum(list)))),
+    list.length?list.map(row):h('div',{class:'empty',style:{padding:'18px 10px'}},ui.lq||ui.ltype?'No matching entries.':'Nothing recorded this month.'));
+  function paint(){
+    const term=ui.lq.trim().toLowerCase();
+    const keep=o=>(!ui.ltype||o.type===ui.ltype)&&ledgerMatch(o,term);
+    const filtering=!!(term||ui.ltype);
+    if(ui.lAll){
+      const rows=allOccurrences(null,null).filter(keep).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
+      const cr=sum(rows.filter(o=>isCredit(o.type))),db=sum(rows.filter(o=>!isCredit(o.type)));
+      if(!rows.length){out.replaceChildren(h('div',{class:'card empty'},h('div',{class:'e'},'🔎'),filtering?'No entries match your search.':'No ledger entries yet.'));return}
+      const groups=new Map();rows.forEach(o=>{if(!groups.has(o.month))groups.set(o.month,[]);groups.get(o.month).push(o)});
+      const nowM=monthOf(todayStr());
+      out.replaceChildren(
+        h('section',{class:'card hero'},h('small',{},filtering?'Matching entries · all months':'All ledger entries'),h('div',{class:'big'},`${rows.length} ${rows.length===1?'entry':'entries'}`),
+          h('div',{class:'stats two'},h('div',{},h('small',{},'Credited'),h('b',{},fmt(cr))),h('div',{},h('small',{},'Debited'),h('b',{},fmt(db))))),
+        ...[...groups].map(([m,list])=>{
+          const net=r2(sum(list.filter(o=>isCredit(o.type)))-sum(list.filter(o=>!isCredit(o.type))));
+          return h('div',{},h('div',{class:'monthhead'},h('span',{},monthLabel(m)+(m>nowM?' · upcoming':'')),h('span',{style:{color:net<0?'var(--bad)':'var(--good)'}},(net<0?'−':'+')+fmt(Math.abs(net)))),
+            h('div',{class:'card',style:{padding:'4px 16px',marginBottom:'4px'}},list.map(row)));
+        }));
+      return;
+    }
+    const S=ledgerSummary(ui.month),rows=allOccurrences(ui.month,ui.month).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0),shown=rows.filter(keep);
+    const hasAny=(data.ledgerEntries||[]).length>0;
+    const bal=S.closing;
+    const hero=h('section',{class:'card hero'},
+      h('small',{},'Closing balance · '+monthLabel(ui.month)),h('div',{class:'big'},(bal<0?'−':'')+fmt(Math.abs(bal))),
+      !hasAny?h('div',{style:{opacity:.9,fontSize:'13px'}},'Add your salary to start tracking your balance.')
+        :S.first&&S.first>ui.month?h('div',{style:{opacity:.9,fontSize:'13px'}},'Your ledger starts in '+monthLabel(S.first)+'.')
+        :h('div',{style:{opacity:.9,fontSize:'13px'}},'Opening '+(S.opening<0?'−':'')+fmt(Math.abs(S.opening))+(S.first&&S.first<ui.month?' carried from '+shortMonth(monthAdd(ui.month,-1)):' · first month')),
+      h('div',{class:'stats four'},
+        h('div',{},h('small',{},'＋ Credited'),h('b',{},fmt(S.credited))),
+        h('div',{},h('small',{},'− Debited'),h('b',{},fmt(S.debited))),
+        h('div',{},h('small',{},'− Expenses'),h('b',{},S.sub?fmt(S.spent):'off')),
+        h('div',{},h('small',{},'Net this month'),h('b',{},(r2(S.credited-S.debited-S.spent)<0?'−':'')+fmt(Math.abs(r2(S.credited-S.debited-S.spent)))))));
+    const credits=shown.filter(o=>isCredit(o.type)),debits=shown.filter(o=>!isCredit(o.type));
+    const expCard=S.sub&&S.first&&S.first<=ui.month&&!filtering&&S.spent>0?h('button',{class:'row-item card',type:'button',style:{padding:'14px 18px'},onclick:()=>{ui.tab='history';ui.all=false;ui.cat='';ui.q='';render();window.scrollTo(0,0)}},
+      h('span',{class:'ico',style:{background:'#6366f122'}},'🧾'),h('span',{class:'mid'},h('b',{},'Expenses tracked this month'),h('small',{},'Deducted from your balance · tap to view')),h('b',{class:'amt',style:{color:'var(--bad)'}},'−'+fmt(S.spent))):null;
+    out.replaceChildren(hero,
+      !hasAny?h('section',{class:'card empty'},h('div',{class:'e'},'💳'),h('h3',{style:{margin:'0 0 6px'}},'Start with your salary'),h('p',{style:{margin:'0 0 14px'}},'Add it once, mark it as repeating until a month you choose, and it appears in every month automatically.'),h('button',{class:'btn primary',type:'button',onclick:()=>openLedgerEntry(null)},'＋ Add salary or EMI')):
+      h('div',{},
+        filtering?h('p',{class:'note',style:{margin:'0 4px 10px'}},`${shown.length} of ${rows.length} entries match`):null,
+        section('Money in',credits,'var(--good)','+'),section('Money out',debits,'var(--bad)','−'),expCard));
+  }
+  paint();
+  return h('div',{},ui.lAll?h('div',{style:{height:'2px'}}):monthBar(),
+    h('div',{class:'searchbox'},h('span',{class:'si','aria-hidden':'true'},'🔎'),search),chips,toggles,out,
+    h('p',{class:'note'},'Balance = opening balance + credits − debits − tracked expenses, carried month to month. Repeating entries appear in every month until their end month.'));
 }
+
 function viewBudgets(){
-  const coupleMode=data.settings.trackerMode==='couple';
-  const scope=coupleMode?'couple':'single';
+  const coupleMode=data.settings.trackerMode==='couple',scope=coupleMode?'couple':'single';
   const total=r2(data.categories.reduce((a,c)=>a+budgetFor(scope,c.id),0));
-  return h('div',{},
-    h('section',{class:'card hero'},h('small',{},coupleMode?'Total monthly couple budget':'Total monthly budget'),h('div',{class:'big',style:{marginBottom:0}},fmt(total))),
+  const custom=id=>{const m=(data.settings.monthBudgets||{})[ui.month];return!!(m&&m[scope]&&Object.prototype.hasOwnProperty.call(m[scope],id))&&budgetFor(scope,id)!==budgetFor(scope,id,monthAdd(ui.month,-1))};
+  return h('div',{},monthBar(),
+    h('section',{class:'card hero'},h('small',{},(coupleMode?'Couple budget · ':'Budget · ')+monthLabel(ui.month)),h('div',{class:'big',style:{marginBottom:0}},fmt(total))),
     h('section',{class:'card'},h('h3',{},coupleMode?'Couple category budgets':'Categories & budgets'),
       data.categories.map(c=>{const b=budgetFor(scope,c.id);return h('button',{class:'row-item',type:'button',onclick:()=>openCategory(c,scope)},
         h('span',{class:'ico',style:{background:c.color+'26'}},c.emoji),
-        h('span',{class:'mid'},h('b',{},c.name),h('small',{},b>0?'Tap to edit':'No budget set')),
+        h('span',{class:'mid'},h('b',{},c.name),h('small',{},(b>0?'Tap to edit':'No budget set')+(custom(c.id)?' · changed this month':''))),
         h('b',{class:'amt'},b>0?fmt(b):'—'))}),
-      h('div',{class:'row'},h('button',{class:'btn ghost',type:'button',onclick:()=>openCategory(null,scope)},'＋ Add category'))));
+      h('div',{class:'row'},h('button',{class:'btn ghost',type:'button',onclick:()=>openCategory(null,scope)},'＋ Add category')),
+      h('p',{class:'note'},'Every month can have its own budgets. A change applies from the month you are viewing onward (or to that month only, if you choose). Earlier months keep their old values.')));
 }
 
 /* ================= settings, backup, folder ================= */
@@ -1119,7 +1374,7 @@ function viewSettings(){
       h('button',{class:'btn outline-danger',type:'button',onclick:async()=>{
         if(await ask('Delete all your expenses?',`This removes ${data.expenses.length} personal expenses. Budgets and split groups stay.`,'Delete everything',true)){data.expenses=[];commit();toast('All expenses deleted')}}},'Delete all my expenses')));
 }
-const TABS=[['home','Home','🏠',viewHome],['history','History','🧾',viewHistory],['ledger','Month ledger','💳',viewMonthLedger],['split','Split','🤝',viewSplit],['budgets','Budgets','🎯',viewBudgets],['settings','Settings','⚙️',viewSettings]];
+const TABS=[['home','Home','🏠',viewHome],['history','History','🧾',viewHistory],['ledger','Ledger','💳',viewMonthLedger],['split','Split','🤝',viewSplit],['budgets','Budgets','🎯',viewBudgets],['settings','Settings','⚙️',viewSettings]];
 function render(){
   if(!me||!data)return;
   const couple=data.settings.trackerMode==='couple';
