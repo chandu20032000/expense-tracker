@@ -1249,11 +1249,12 @@ function viewMonthLedger(){
       h('small',{},'Closing balance · '+monthLabel(ui.month)),h('div',{class:'big'},(bal<0?'−':'')+fmt(Math.abs(bal))),
       !hasAny?h('div',{style:{opacity:.9,fontSize:'13px'}},'Add your salary to start tracking your balance.')
         :S.first&&S.first>ui.month?h('div',{style:{opacity:.9,fontSize:'13px'}},'Your ledger starts in '+monthLabel(S.first)+'.')
-        :h('div',{style:{opacity:.9,fontSize:'13px'}},'Opening '+(S.opening<0?'−':'')+fmt(Math.abs(S.opening))+(S.first&&S.first<ui.month?' carried from '+shortMonth(monthAdd(ui.month,-1)):' · first month')),
-      h('div',{class:'stats'},
+        :h('div',{style:{opacity:.9,fontSize:'13px'}},'Brought forward + this month’s net'),
+      h('div',{class:'stats four'},
+        h('div',{},h('small',{},'↩ Brought forward'),h('b',{},(S.opening<0?'−':'')+fmt(Math.abs(S.opening)))),
+        h('div',{},h('small',{},'Net this month'),h('b',{},(r2(S.credited-S.debited)<0?'−':'')+fmt(Math.abs(r2(S.credited-S.debited))))),
         h('div',{},h('small',{},'＋ Credited'),h('b',{},fmt(S.credited))),
-        h('div',{},h('small',{},'− Debited'),h('b',{},fmt(S.debited))),
-        h('div',{},h('small',{},'Net this month'),h('b',{},(r2(S.credited-S.debited-S.spent)<0?'−':'')+fmt(Math.abs(r2(S.credited-S.debited-S.spent)))))));
+        h('div',{},h('small',{},'− Debited'),h('b',{},fmt(S.debited)))));
     const credits=shown.filter(o=>isCredit(o.type)),debits=shown.filter(o=>!isCredit(o.type));
     out.replaceChildren(hero,
       !hasAny?h('section',{class:'card empty'},h('div',{class:'e'},'💳'),h('h3',{style:{margin:'0 0 6px'}},'Start with your salary'),h('p',{style:{margin:'0 0 14px'}},'Add it once, mark it as repeating until a month you choose, and it appears in every month automatically.'),h('button',{class:'btn primary',type:'button',onclick:()=>openLedgerEntry(null)},'＋ Add salary or EMI')):
