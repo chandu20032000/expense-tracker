@@ -1104,7 +1104,7 @@ function expensesByMonth(){
 }
 /* Opening balance = everything credited − debited − spent in all earlier months, starting from the first ledger entry. */
 function ledgerSummary(M){
-  const entries=data.ledgerEntries||[],sub=data.settings.ledgerBalance!==false;
+  const entries=data.ledgerEntries||[],sub=false;
   const first=entries.reduce((a,e)=>{const m=monthOf(e.date);return!a||m<a?m:a},'');
   const exp=sub?expensesByMonth():new Map(),flow=new Map();
   allOccurrences(null,M).forEach(o=>{const t=flow.get(o.month)||{cr:0,db:0};if(isCredit(o.type))t.cr+=P(o.amount);else t.db+=P(o.amount);flow.set(o.month,t)});
@@ -1213,8 +1213,7 @@ function viewMonthLedger(){
   const chips=h('div',{class:'chiprow scroll',style:{margin:'10px 0 4px'}},
     typeChips.map(([v,l])=>h('button',{type:'button',class:'chip'+(ui.ltype===v?' on':''),onclick:()=>{ui.ltype=v;render()}},l)));
   const toggles=h('div',{class:'chiprow',style:{marginBottom:'12px'}},
-    h('button',{type:'button',class:'chip'+(ui.lAll?' on':''),onclick:()=>{ui.lAll=!ui.lAll;render()}},ui.lAll?'✓ All months':'📅 All months'),
-    h('button',{type:'button',class:'chip'+(data.settings.ledgerBalance!==false?' on':''),onclick:()=>{data.settings.ledgerBalance=data.settings.ledgerBalance===false;commit()}},data.settings.ledgerBalance!==false?'✓ Expenses deducted':'Expenses not deducted'));
+    h('button',{type:'button',class:'chip'+(ui.lAll?' on':''),onclick:()=>{ui.lAll=!ui.lAll;render()}},ui.lAll?'✓ All months':'📅 All months'));
   const out=h('div');
   const row=o=>h('button',{class:'row-item',type:'button',onclick:()=>openLedgerEntry(o.entry,o)},
     h('span',{class:'ico',style:{background:(isCredit(o.type)?'#10b981':'#ef4444')+'22'}},lIcon(o.type)),
@@ -1251,24 +1250,21 @@ function viewMonthLedger(){
       !hasAny?h('div',{style:{opacity:.9,fontSize:'13px'}},'Add your salary to start tracking your balance.')
         :S.first&&S.first>ui.month?h('div',{style:{opacity:.9,fontSize:'13px'}},'Your ledger starts in '+monthLabel(S.first)+'.')
         :h('div',{style:{opacity:.9,fontSize:'13px'}},'Opening '+(S.opening<0?'−':'')+fmt(Math.abs(S.opening))+(S.first&&S.first<ui.month?' carried from '+shortMonth(monthAdd(ui.month,-1)):' · first month')),
-      h('div',{class:'stats four'},
+      h('div',{class:'stats'},
         h('div',{},h('small',{},'＋ Credited'),h('b',{},fmt(S.credited))),
         h('div',{},h('small',{},'− Debited'),h('b',{},fmt(S.debited))),
-        h('div',{},h('small',{},'− Expenses'),h('b',{},S.sub?fmt(S.spent):'off')),
         h('div',{},h('small',{},'Net this month'),h('b',{},(r2(S.credited-S.debited-S.spent)<0?'−':'')+fmt(Math.abs(r2(S.credited-S.debited-S.spent)))))));
     const credits=shown.filter(o=>isCredit(o.type)),debits=shown.filter(o=>!isCredit(o.type));
-    const expCard=S.sub&&S.first&&S.first<=ui.month&&!filtering&&S.spent>0?h('button',{class:'row-item card',type:'button',style:{padding:'14px 18px'},onclick:()=>{ui.tab='history';ui.all=false;ui.cat='';ui.q='';render();window.scrollTo(0,0)}},
-      h('span',{class:'ico',style:{background:'#6366f122'}},'🧾'),h('span',{class:'mid'},h('b',{},'Expenses tracked this month'),h('small',{},'Deducted from your balance · tap to view')),h('b',{class:'amt',style:{color:'var(--bad)'}},'−'+fmt(S.spent))):null;
     out.replaceChildren(hero,
       !hasAny?h('section',{class:'card empty'},h('div',{class:'e'},'💳'),h('h3',{style:{margin:'0 0 6px'}},'Start with your salary'),h('p',{style:{margin:'0 0 14px'}},'Add it once, mark it as repeating until a month you choose, and it appears in every month automatically.'),h('button',{class:'btn primary',type:'button',onclick:()=>openLedgerEntry(null)},'＋ Add salary or EMI')):
       h('div',{},
         filtering?h('p',{class:'note',style:{margin:'0 4px 10px'}},`${shown.length} of ${rows.length} entries match`):null,
-        section('Money in',credits,'var(--good)','+'),section('Money out',debits,'var(--bad)','−'),expCard));
+        section('Money in',credits,'var(--good)','+'),section('Money out',debits,'var(--bad)','−')));
   }
   paint();
   return h('div',{},ui.lAll?h('div',{style:{height:'2px'}}):monthBar(),
     h('div',{class:'searchbox'},h('span',{class:'si','aria-hidden':'true'},'🔎'),search),chips,toggles,out,
-    h('p',{class:'note'},'Balance = opening balance + credits − debits − tracked expenses, carried month to month. Repeating entries appear in every month until their end month.'));
+    h('p',{class:'note'},'Balance = opening balance + credits − debits, carried month to month. Your tracked expenses are not deducted here. Repeating entries appear in every month until their end month.'));
 }
 
 function viewBudgets(){
