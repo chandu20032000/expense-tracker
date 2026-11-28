@@ -1244,15 +1244,15 @@ function viewMonthLedger(){
     }
     const S=ledgerSummary(ui.month),rows=allOccurrences(ui.month,ui.month).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0),shown=rows.filter(keep);
     const hasAny=(data.ledgerEntries||[]).length>0;
-    const bal=S.closing;
+    const bal=r2(S.credited-S.debited);
     const hero=h('section',{class:'card hero'},
-      h('small',{},'Closing balance · '+monthLabel(ui.month)),h('div',{class:'big'},(bal<0?'−':'')+fmt(Math.abs(bal))),
+      h('small',{},'Net this month · '+monthLabel(ui.month)),h('div',{class:'big'},(bal<0?'−':'')+fmt(Math.abs(bal))),
       !hasAny?h('div',{style:{opacity:.9,fontSize:'13px'}},'Add your salary to start tracking your balance.')
         :S.first&&S.first>ui.month?h('div',{style:{opacity:.9,fontSize:'13px'}},'Your ledger starts in '+monthLabel(S.first)+'.')
-        :h('div',{style:{opacity:.9,fontSize:'13px'}},'Brought forward + this month’s net'),
+        :h('div',{style:{opacity:.9,fontSize:'13px'}},'Credited − debited this month'),
       h('div',{class:'stats four'},
+        h('div',{},h('small',{},'Closing balance'),h('b',{},(S.closing<0?'−':'')+fmt(Math.abs(S.closing)))),
         h('div',{},h('small',{},'↩ Brought forward'),h('b',{},(S.opening<0?'−':'')+fmt(Math.abs(S.opening)))),
-        h('div',{},h('small',{},'Net this month'),h('b',{},(r2(S.credited-S.debited)<0?'−':'')+fmt(Math.abs(r2(S.credited-S.debited))))),
         h('div',{},h('small',{},'＋ Credited'),h('b',{},fmt(S.credited))),
         h('div',{},h('small',{},'− Debited'),h('b',{},fmt(S.debited)))));
     const credits=shown.filter(o=>isCredit(o.type)),debits=shown.filter(o=>!isCredit(o.type));
