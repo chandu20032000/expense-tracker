@@ -1,4 +1,4 @@
-const CACHE_NAME = 'expense-tracker-local-v2';
+const CACHE_NAME = 'expense-tracker-local-v3';
 const APP_FILES = [
   './',
   './index.html',
@@ -23,18 +23,20 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Network first: when the local server is running you always get the latest files
+// (and the cache is refreshed); when offline, the cached copy is used.
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(request).then(cached => cached || fetch(request).then(response => {
+    fetch(request).then(response => {
       if (response && response.ok) {
         const copy = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
       }
       return response;
-    }).catch(() => caches.match('./index.html')))
+    }).catch(() => caches.match(request).then(hit => hit || caches.match('./index.html')))
   );
 });
